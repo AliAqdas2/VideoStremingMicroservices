@@ -1,0 +1,14 @@
+node_modules/
+*.log
+uploads/
+temp_uploads/
+.DS_Store
+*.swp
+*.swo
+*~
+
+# Google Cloud Service Account Keys (sensitive credentials - DO NOT COMMIT)
+!package.json
+!package-lock.json
+
+

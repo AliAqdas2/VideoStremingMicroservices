@@ -1,0 +1,143 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:7
+    container_name: videostream-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - videostream-network
+
+  user-acc-mgmt-serv:
+    build: ./user-acc-mgmt-serv
+    container_name: user-acc-mgmt-serv
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - MONGODB_URI=mongodb://mongodb:27017/videostream_users
+      - JWT_SECRET=your-secret-key-change-in-production
+      - LOGGING_SERVICE_URL=http://logging-serv:3006
+    depends_on:
+      - mongodb
+      - logging-serv
+    networks:
+      - videostream-network
+
+  storage-mgmt-serv:
+    build: ./storage-mgmt-serv
+    container_name: storage-mgmt-serv
+    ports:
+      - "3002:3002"
+    environment:
+      - PORT=3002
+      - MONGODB_URI=mongodb://mongodb:27017/videostream_storage
+      - STORAGE_DIR=/app/uploads
+      - LOGGING_SERVICE_URL=http://logging-serv:3006
+    volumes:
+      - storage_data:/app/uploads
+    depends_on:
+      - mongodb
+      - logging-serv
+    networks:
+      - videostream-network
+
+  usage-mntr-serv:
+    build: ./usage-mntr-serv
+    container_name: usage-mntr-serv
+    ports:
+      - "3003:3003"
+    environment:
+      - PORT=3003
+      - MONGODB_URI=mongodb://mongodb:27017/videostream_usage
+      - LOGGING_SERVICE_URL=http://logging-serv:3006
+    depends_on:
+      - mongodb
+      - logging-serv
+    networks:
+      - videostream-network
+
+  model-serv:
+    build: ./model-serv
+    container_name: model-serv
+    ports:
+      - "3004:3004"
+    environment:
+      - PORT=3004
+      - USER_SERVICE_URL=http://user-acc-mgmt-serv:3001
+      - STORAGE_SERVICE_URL=http://storage-mgmt-serv:3002
+      - USAGE_SERVICE_URL=http://usage-mntr-serv:3003
+      - LOGGING_SERVICE_URL=http://logging-serv:3006
+    depends_on:
+      - user-acc-mgmt-serv
+      - storage-mgmt-serv
+      - usage-mntr-serv
+      - logging-serv
+    networks:
+      - videostream-network
+
+  controller-serv:
+    build: ./controller-serv
+    container_name: controller-serv
+    ports:
+      - "3005:3005"
+    environment:
+      - PORT=3005
+      - USER_SERVICE_URL=http://user-acc-mgmt-serv:3001
+      - MODEL_SERVICE_URL=http://model-serv:3004
+      - STORAGE_SERVICE_URL=http://storage-mgmt-serv:3002
+      - LOGGING_SERVICE_URL=http://logging-serv:3006
+      - TEMP_UPLOAD_DIR=/app/temp_uploads
+      - GCS_BUCKET_NAME=${GCS_BUCKET_NAME:-videostream-videos}
+      - GCS_PROJECT_ID=${GCS_PROJECT_ID:-}
+      - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS:-}
+    volumes:
+      - temp_uploads:/app/temp_uploads
+      # Mount GCS service account key if provided
+      # - ./key.json:/var/secrets/google/key.json:ro
+    depends_on:
+      - user-acc-mgmt-serv
+      - model-serv
+      - storage-mgmt-serv
+      - logging-serv
+    networks:
+      - videostream-network
+
+  logging-serv:
+    build: ./logging-serv
+    container_name: logging-serv
+    ports:
+      - "3006:3006"
+    environment:
+      - PORT=3006
+      - MONGODB_URI=mongodb://mongodb:27017/videostream_logs
+    depends_on:
+      - mongodb
+    networks:
+      - videostream-network
+
+  view-generator-serv:
+    build: ./view-generator-serv
+    container_name: view-generator-serv
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - CONTROLLER_SERVICE_URL=http://controller-serv:3005
+    depends_on:
+      - controller-serv
+    networks:
+      - videostream-network
+
+volumes:
+  mongodb_data:
+  storage_data:
+  temp_uploads:
+
+networks:
+  videostream-network:
+    driver: bridge
+

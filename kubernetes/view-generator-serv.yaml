@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: view-generator-serv
+  namespace: videostream
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: view-generator-serv
+  template:
+    metadata:
+      labels:
+        app: view-generator-serv
+    spec:
+      containers:
+      - name: view-generator-serv
+        image: gcr.io/YOUR_PROJECT_ID/view-generator-serv:latest
+        ports:
+        - containerPort: 3000
+        env:
+        - name: PORT
+          value: "3000"
+        - name: CONTROLLER_SERVICE_URL
+          value: "http://controller-serv:3005"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: view-generator-serv
+  namespace: videostream
+spec:
+  selector:
+    app: view-generator-serv
+  ports:
+  - port: 3000
+    targetPort: 3000
+  type: LoadBalancer
+
