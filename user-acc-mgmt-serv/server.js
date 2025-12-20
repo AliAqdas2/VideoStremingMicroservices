@@ -178,6 +178,14 @@ const verifyToken = async (req, res, next) => {
   }
 };
 
+// Admin middleware - checks if user is admin
+const requireAdmin = (req, res, next) => {
+  if (!req.user || req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  next();
+};
+
 // Get current user (MUST come before /api/users/:userId to avoid route conflict)
 app.get('/api/users/me', verifyToken, async (req, res) => {
   try {
@@ -188,6 +196,50 @@ app.get('/api/users/me', verifyToken, async (req, res) => {
     res.json(user);
   } catch (error) {
     await logEvent('error', 'UserAccMgmtServ', `Get current user error: ${error.message}`);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get all users (admin only)
+app.get('/api/users', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const users = await User.find({}).select('-password').sort({ createdAt: -1 });
+    await logEvent('info', 'UserAccMgmtServ', `Admin fetched all users`, req.user.userId);
+    res.json({ users });
+  } catch (error) {
+    await logEvent('error', 'UserAccMgmtServ', `Get all users error: ${error.message}`);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update user role (admin only)
+app.put('/api/users/:userId/role', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { role } = req.body;
+
+    if (!role || !['user', 'admin'].includes(role)) {
+      return res.status(400).json({ error: 'Invalid role. Must be "user" or "admin"' });
+    }
+
+    if (userId === req.user.userId) {
+      return res.status(400).json({ error: 'Cannot change your own role' });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { $set: { role } },
+      { new: true }
+    ).select('-password');
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    await logEvent('info', 'UserAccMgmtServ', `Admin updated user role: ${user.email} -> ${role}`, req.user.userId);
+    res.json({ message: 'User role updated successfully', user });
+  } catch (error) {
+    await logEvent('error', 'UserAccMgmtServ', `Update user role error: ${error.message}`);
     res.status(500).json({ error: error.message });
   }
 });

@@ -222,6 +222,49 @@ app.post('/api/storage/:userId/add-file', async (req, res) => {
   }
 });
 
+// Get aggregate storage stats (admin only)
+// Note: In production, you should add authentication middleware here
+app.get('/api/storage/admin/stats', async (req, res) => {
+  try {
+    const allStorage = await Storage.find({});
+    
+    let totalUsedStorage = 0;
+    let totalMaxStorage = 0;
+    let totalUsers = allStorage.length;
+    let totalFiles = 0;
+    let usersOver80Percent = 0;
+    let usersAtLimit = 0;
+
+    allStorage.forEach(storage => {
+      totalUsedStorage += storage.usedStorage;
+      totalMaxStorage += storage.maxStorage;
+      totalFiles += storage.files.length;
+      
+      const usagePercent = (storage.usedStorage / storage.maxStorage) * 100;
+      if (usagePercent >= 100) {
+        usersAtLimit++;
+      } else if (usagePercent >= 80) {
+        usersOver80Percent++;
+      }
+    });
+
+    res.json({
+      totalUsedStorage,
+      totalMaxStorage,
+      totalAvailableStorage: totalMaxStorage - totalUsedStorage,
+      usagePercent: totalMaxStorage > 0 ? ((totalUsedStorage / totalMaxStorage) * 100).toFixed(2) : 0,
+      totalUsers,
+      totalFiles,
+      usersOver80Percent,
+      usersAtLimit,
+      averageUsagePerUser: totalUsers > 0 ? (totalUsedStorage / totalUsers) : 0
+    });
+  } catch (error) {
+    await logEvent('error', 'StorageMgmtServ', `Get admin stats error: ${error.message}`);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get all videos from all users (public feed)
 app.get('/api/storage/public/videos', async (req, res) => {
   try {

@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Fragment } from 'react';
 import axios from 'axios';
-import { FaVideo, FaUpload, FaTrash, FaUser, FaSignOutAlt, FaList, FaTimes, FaFilter } from 'react-icons/fa';
+import { FaVideo, FaUpload, FaTrash, FaUser, FaSignOutAlt, FaTimes, FaUserShield } from 'react-icons/fa';
+import AdminPanel from './AdminPanel';
 import './App.css';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || window.API_BASE_URL || 'http://localhost:3005';
@@ -15,11 +16,9 @@ function App() {
   const [usage, setUsage] = useState(null);
   const [selectedVideos, setSelectedVideos] = useState(new Set());
   const [alert, setAlert] = useState(null);
-  const [showLogs, setShowLogs] = useState(false);
-  const [logs, setLogs] = useState([]);
-  const [logFilters, setLogFilters] = useState({ service: '', level: '', limit: 100 });
   const [showDashboard, setShowDashboard] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
   const videoRefs = useRef({});
   const containerRef = useRef(null);
 
@@ -207,23 +206,6 @@ function App() {
     }
   };
 
-  const fetchLogs = async () => {
-    try {
-      const token = localStorage.getItem('authToken');
-      const params = new URLSearchParams();
-      if (logFilters.service) params.append('service', logFilters.service);
-      if (logFilters.level) params.append('level', logFilters.level);
-      params.append('limit', logFilters.limit);
-
-      // Logging service doesn't require auth, but we can pass token for tracking
-      const response = await axios.get(`${LOGGING_SERVICE_URL}/api/logs?${params.toString()}`);
-
-      setLogs(response.data.logs || []);
-    } catch (error) {
-      showAlertMessage('Failed to fetch logs', 'error');
-      console.error('Logs fetch error:', error);
-    }
-  };
 
   const uploadVideo = async (e) => {
     e.preventDefault();
@@ -286,68 +268,173 @@ function App() {
 
   return (
     <div className="app-container">
-      <header className="app-header">
-        <div className="header-content">
-          <h1>
-            <FaVideo /> Short Video Platform
-          </h1>
-          {!isAuthenticated ? (
-            <div className="auth-section">
-              {!showRegister ? (
-                <form className="auth-form" onSubmit={login}>
-                  <h2>Login</h2>
-                  <input type="email" name="email" placeholder="Email" required />
-                  <input type="password" name="password" placeholder="Password" required />
-                  <button type="submit">Login</button>
-                  <p>
-                    Don't have an account?{' '}
-                    <a href="#" onClick={(e) => { e.preventDefault(); setShowRegister(true); }}>
-                      Register
-                    </a>
-                  </p>
-                </form>
-              ) : (
-                <form className="auth-form" onSubmit={register}>
-                  <h2>Register</h2>
-                  <input type="text" name="username" placeholder="Username" required />
-                  <input type="email" name="email" placeholder="Email" required />
-                  <input type="password" name="password" placeholder="Password" required />
-                  <button type="submit">Register</button>
-                  <p>
-                    Already have an account?{' '}
-                    <a href="#" onClick={(e) => { e.preventDefault(); setShowRegister(false); }}>
-                      Login
-                    </a>
-                  </p>
-                </form>
-              )}
-            </div>
-          ) : (
-            <div className="user-info">
-              <span>Welcome, {currentUser?.username}</span>
-              <div className="header-actions">
-                {isAdmin && (
-                  <button className="icon-button" onClick={() => { setShowLogs(!showLogs); if (!showLogs) fetchLogs(); }} title="View Logs">
-                    <FaList />
-                  </button>
-                )}
-                <button className="icon-button" onClick={() => setShowDashboard(!showDashboard)} title="Dashboard">
-                  <FaUser />
-                </button>
-                <button className="icon-button" onClick={() => setShowUpload(!showUpload)} title="Upload">
-                  <FaUpload />
-                </button>
-                <button className="icon-button" onClick={logout} title="Logout">
-                  <FaSignOutAlt />
-                </button>
+      {!isAuthenticated ? (
+        <div className="auth-page">
+          <div className="auth-container">
+            <div className="auth-header">
+              <div className="logo-section">
+                <FaVideo className="logo-icon" />
+                <h1>Short Video Platform</h1>
+                <p className="tagline">Share your moments, discover amazing content</p>
               </div>
             </div>
-          )}
-        </div>
-      </header>
 
-      {isAuthenticated && (
-        <>
+            <div className="auth-card">
+              <div className="auth-tabs">
+                <button
+                  className={`auth-tab ${!showRegister ? 'active' : ''}`}
+                  onClick={() => setShowRegister(false)}
+                >
+                  Login
+                </button>
+                <button
+                  className={`auth-tab ${showRegister ? 'active' : ''}`}
+                  onClick={() => setShowRegister(true)}
+                >
+                  Sign Up
+                </button>
+              </div>
+
+              {!showRegister ? (
+                <form className="auth-form-content" onSubmit={login}>
+                  <div className="form-group">
+                    <label htmlFor="login-email">Email Address</label>
+                    <input
+                      type="email"
+                      id="login-email"
+                      name="email"
+                      placeholder="Enter your email"
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="login-password">Password</label>
+                    <input
+                      type="password"
+                      id="login-password"
+                      name="password"
+                      placeholder="Enter your password"
+                      required
+                    />
+                  </div>
+                  <button type="submit" className="auth-submit-button">
+                    <span>Login</span>
+                  </button>
+                  <div className="auth-divider">
+                    <span>New to the platform?</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="auth-switch-button"
+                    onClick={() => setShowRegister(true)}
+                  >
+                    Create an account
+                  </button>
+                </form>
+              ) : (
+                <form className="auth-form-content" onSubmit={register}>
+                  <div className="form-group">
+                    <label htmlFor="register-username">Username</label>
+                    <input
+                      type="text"
+                      id="register-username"
+                      name="username"
+                      placeholder="Choose a username"
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="register-email">Email Address</label>
+                    <input
+                      type="email"
+                      id="register-email"
+                      name="email"
+                      placeholder="Enter your email"
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="register-password">Password</label>
+                    <input
+                      type="password"
+                      id="register-password"
+                      name="password"
+                      placeholder="Create a password"
+                      required
+                    />
+                  </div>
+                  <button type="submit" className="auth-submit-button">
+                    <span>Create Account</span>
+                  </button>
+                  <div className="auth-divider">
+                    <span>Already have an account?</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="auth-switch-button"
+                    onClick={() => setShowRegister(false)}
+                  >
+                    Sign in instead
+                  </button>
+                </form>
+              )}
+
+              <div className="auth-features">
+                <div className="feature-item">
+                  <FaVideo className="feature-icon" />
+                  <div>
+                    <h4>Upload & Share</h4>
+                    <p>Share your short videos with the community</p>
+                  </div>
+                </div>
+                <div className="feature-item">
+                  <FaUser className="feature-icon" />
+                  <div>
+                    <h4>50MB Storage</h4>
+                    <p>Get 50MB of free storage for your videos</p>
+                  </div>
+                </div>
+                <div className="feature-item">
+                  <FaUpload className="feature-icon" />
+                  <div>
+                    <h4>100MB Daily</h4>
+                    <p>100MB daily bandwidth for uploads</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : showAdminPanel ? (
+        <AdminPanel currentUser={currentUser} onBack={() => setShowAdminPanel(false)} />
+      ) : (
+        <Fragment>
+          <header className="app-header">
+            <div className="header-content">
+              <h1>
+                <FaVideo /> Short Video Platform
+              </h1>
+              <div className="user-info">
+                <span>Welcome, {currentUser?.username}</span>
+                <div className="header-actions">
+                  {isAdmin && (
+                    <button className="icon-button" onClick={() => setShowAdminPanel(true)} title="Admin Panel">
+                      <FaUserShield />
+                    </button>
+                  )}
+                  <button className="icon-button" onClick={() => setShowDashboard(!showDashboard)} title="Dashboard">
+                    <FaUser />
+                  </button>
+                  <button className="icon-button" onClick={() => setShowUpload(!showUpload)} title="Upload">
+                    <FaUpload />
+                  </button>
+                  <button className="icon-button" onClick={logout} title="Logout">
+                    <FaSignOutAlt />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </header>
           {/* Dashboard Modal */}
           {showDashboard && (
             <div className="modal-overlay" onClick={() => setShowDashboard(false)}>
@@ -449,76 +536,6 @@ function App() {
             </div>
           )}
 
-          {/* Admin Logs Modal */}
-          {showLogs && isAdmin && (
-            <div className="modal-overlay" onClick={() => setShowLogs(false)}>
-              <div className="modal-content logs-modal" onClick={(e) => e.stopPropagation()}>
-                <div className="modal-header">
-                  <h2>System Logs</h2>
-                  <button className="close-button" onClick={() => setShowLogs(false)}>
-                    <FaTimes />
-                  </button>
-                </div>
-                <div className="logs-filters">
-                  <select
-                    value={logFilters.service}
-                    onChange={(e) => setLogFilters({ ...logFilters, service: e.target.value })}
-                  >
-                    <option value="">All Services</option>
-                    <option value="UserAccMgmtServ">User Service</option>
-                    <option value="StorageMgmtServ">Storage Service</option>
-                    <option value="UsageMntrServ">Usage Service</option>
-                    <option value="ModelServ">Model Service</option>
-                    <option value="ControllerServ">Controller Service</option>
-                    <option value="LoggingServ">Logging Service</option>
-                  </select>
-                  <select
-                    value={logFilters.level}
-                    onChange={(e) => setLogFilters({ ...logFilters, level: e.target.value })}
-                  >
-                    <option value="">All Levels</option>
-                    <option value="info">Info</option>
-                    <option value="warn">Warning</option>
-                    <option value="error">Error</option>
-                  </select>
-                  <button onClick={fetchLogs} className="filter-button">
-                    <FaFilter /> Apply Filters
-                  </button>
-                </div>
-                <div className="logs-container">
-                  {logs.length === 0 ? (
-                    <p>No logs found</p>
-                  ) : (
-                    <table className="logs-table">
-                      <thead>
-                        <tr>
-                          <th>Timestamp</th>
-                          <th>Level</th>
-                          <th>Service</th>
-                          <th>Message</th>
-                          <th>User ID</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {logs.map((log, index) => (
-                          <tr key={index} className={`log-row log-${log.level}`}>
-                            <td>{new Date(log.timestamp).toLocaleString()}</td>
-                            <td>
-                              <span className={`log-badge log-badge-${log.level}`}>{log.level}</span>
-                            </td>
-                            <td>{log.service}</td>
-                            <td>{log.message}</td>
-                            <td>{log.userId || '-'}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* TikTok-Style Video Feed */}
           <main className="video-feed-container" ref={containerRef}>
             {videos.length === 0 ? (
@@ -572,7 +589,7 @@ function App() {
               })
             )}
           </main>
-        </>
+        </Fragment>
       )}
 
       {alert && (
