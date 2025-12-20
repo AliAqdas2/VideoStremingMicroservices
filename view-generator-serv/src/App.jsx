@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, Fragment } from 'react';
 import axios from 'axios';
-import { FaVideo, FaUpload, FaTrash, FaUser, FaSignOutAlt, FaTimes, FaUserShield } from 'react-icons/fa';
+import { FaVideo, FaUpload, FaTrash, FaUser, FaSignOutAlt, FaTimes, FaUserShield, FaSpinner } from 'react-icons/fa';
 import AdminPanel from './AdminPanel';
 import './App.css';
 
@@ -19,6 +19,12 @@ function App() {
   const [showDashboard, setShowDashboard] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
+  const [loading, setLoading] = useState({
+    login: false,
+    register: false,
+    upload: false,
+    deletingVideos: new Set() // Track which videos are being deleted
+  });
   const videoRefs = useRef({});
   const containerRef = useRef(null);
 
@@ -120,6 +126,8 @@ function App() {
     const email = e.target.email.value;
     const password = e.target.password.value;
 
+    setLoading(prev => ({ ...prev, login: true }));
+
     try {
       const response = await axios.post(`${API_BASE_URL}/api/auth/login`, {
         email,
@@ -135,6 +143,8 @@ function App() {
       loadDashboard(token);
     } catch (error) {
       showAlertMessage(error.response?.data?.error || 'Login failed', 'error');
+    } finally {
+      setLoading(prev => ({ ...prev, login: false }));
     }
   };
 
@@ -143,6 +153,8 @@ function App() {
     const username = e.target.username.value;
     const email = e.target.email.value;
     const password = e.target.password.value;
+
+    setLoading(prev => ({ ...prev, register: true }));
 
     try {
       await axios.post(`${API_BASE_URL}/api/auth/register`, {
@@ -155,6 +167,8 @@ function App() {
       setShowRegister(false);
     } catch (error) {
       showAlertMessage(error.response?.data?.error || 'Registration failed', 'error');
+    } finally {
+      setLoading(prev => ({ ...prev, register: false }));
     }
   };
 
@@ -217,6 +231,8 @@ function App() {
       return;
     }
 
+    setLoading(prev => ({ ...prev, upload: true }));
+
     const formData = new FormData();
     formData.append('video', file);
 
@@ -235,6 +251,8 @@ function App() {
       loadDashboard(token);
     } catch (error) {
       showAlertMessage(error.response?.data?.error || error.response?.data?.message || 'Upload failed', 'error');
+    } finally {
+      setLoading(prev => ({ ...prev, upload: false }));
     }
   };
 
@@ -242,6 +260,12 @@ function App() {
     if (!window.confirm('Are you sure you want to delete this video?')) {
       return;
     }
+
+    // Add filename to deleting set
+    setLoading(prev => ({
+      ...prev,
+      deletingVideos: new Set(prev.deletingVideos).add(filename)
+    }));
 
     try {
       const token = localStorage.getItem('authToken');
@@ -258,6 +282,13 @@ function App() {
       } else {
         showAlertMessage('Failed to delete video', 'error');
       }
+    } finally {
+      // Remove filename from deleting set
+      setLoading(prev => {
+        const newSet = new Set(prev.deletingVideos);
+        newSet.delete(filename);
+        return { ...prev, deletingVideos: newSet };
+      });
     }
   };
 
@@ -317,8 +348,14 @@ function App() {
                       required
                     />
                   </div>
-                  <button type="submit" className="auth-submit-button">
-                    <span>Login</span>
+                  <button type="submit" className="auth-submit-button" disabled={loading.login}>
+                    {loading.login ? (
+                      <>
+                        <FaSpinner className="spinner" /> Logging in...
+                      </>
+                    ) : (
+                      <span>Login</span>
+                    )}
                   </button>
                   <div className="auth-divider">
                     <span>New to the platform?</span>
@@ -363,8 +400,14 @@ function App() {
                       required
                     />
                   </div>
-                  <button type="submit" className="auth-submit-button">
-                    <span>Create Account</span>
+                  <button type="submit" className="auth-submit-button" disabled={loading.register}>
+                    {loading.register ? (
+                      <>
+                        <FaSpinner className="spinner" /> Creating Account...
+                      </>
+                    ) : (
+                      <span>Create Account</span>
+                    )}
                   </button>
                   <div className="auth-divider">
                     <span>Already have an account?</span>
@@ -528,8 +571,14 @@ function App() {
                     <FaUpload /> Choose Video
                   </button>
                   <span id="selected-file" className="selected-file"></span>
-                  <button type="submit" id="upload-btn" className="upload-button" disabled>
-                    Upload
+                  <button type="submit" id="upload-btn" className="upload-button" disabled={loading.upload}>
+                    {loading.upload ? (
+                      <>
+                        <FaSpinner className="spinner" /> Uploading...
+                      </>
+                    ) : (
+                      'Upload'
+                    )}
                   </button>
                 </form>
               </div>
@@ -578,9 +627,14 @@ function App() {
                         <button
                           className="video-delete-button"
                           onClick={() => deleteVideo(video.filename)}
-                          title="Delete Video"
+                          disabled={loading.deletingVideos.has(video.filename)}
+                          title={loading.deletingVideos.has(video.filename) ? "Deleting..." : "Delete Video"}
                         >
-                          <FaTrash />
+                          {loading.deletingVideos.has(video.filename) ? (
+                            <FaSpinner className="spinner" />
+                          ) : (
+                            <FaTrash />
+                          )}
                         </button>
                       )}
                     </div>

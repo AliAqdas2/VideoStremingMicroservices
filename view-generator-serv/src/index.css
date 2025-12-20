@@ -222,13 +222,25 @@ body {
     box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
 }
 
-.auth-submit-button:hover {
+.auth-submit-button:hover:not(:disabled) {
     transform: translateY(-2px);
     box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
 }
 
-.auth-submit-button:active {
+.auth-submit-button:active:not(:disabled) {
     transform: translateY(0);
+}
+
+.auth-submit-button:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.auth-submit-button .spinner {
+    animation: spin 1s linear infinite;
+    display: inline-block;
+    margin-right: 8px;
 }
 
 .auth-divider {
@@ -425,9 +437,20 @@ body {
     margin-left: 20px;
 }
 
-.video-delete-button:hover {
+.video-delete-button:hover:not(:disabled) {
     background: rgba(220, 53, 69, 1);
     transform: scale(1.1);
+}
+
+.video-delete-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.video-delete-button .spinner {
+    animation: spin 1s linear infinite;
+    display: inline-block;
 }
 
 /* No Videos State */
@@ -621,6 +644,12 @@ body {
 .upload-button:disabled {
     background: #6c757d;
     cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.upload-button .spinner {
+    animation: spin 1s linear infinite;
+    display: inline-block;
 }
 
 .selected-file {
@@ -750,6 +779,15 @@ body {
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
     animation: slideIn 0.3s ease;
     min-width: 300px;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 @keyframes slideIn {

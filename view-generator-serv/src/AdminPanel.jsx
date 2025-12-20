@@ -15,6 +15,7 @@ function AdminPanel({ currentUser, onBack }) {
   const [logs, setLogs] = useState([]);
   const [logFilters, setLogFilters] = useState({ service: '', level: '', limit: 500 });
   const [loading, setLoading] = useState(true);
+  const [loadingUsers, setLoadingUsers] = useState(new Set()); // Track which users are being updated
 
   useEffect(() => {
     loadData();
@@ -75,6 +76,9 @@ function AdminPanel({ currentUser, onBack }) {
       return;
     }
 
+    // Add userId to loading set
+    setLoadingUsers(prev => new Set(prev).add(userId));
+
     try {
       const token = localStorage.getItem('authToken');
       await axios.put(
@@ -91,10 +95,17 @@ function AdminPanel({ currentUser, onBack }) {
       );
       
       alert('User role updated successfully!');
-      loadUsers(); // Refresh users list
+      await loadUsers(); // Refresh users list
     } catch (error) {
       console.error('Error updating user role:', error);
       alert(error.response?.data?.error || 'Failed to update user role');
+    } finally {
+      // Remove userId from loading set
+      setLoadingUsers(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(userId);
+        return newSet;
+      });
     }
   };
 
@@ -102,6 +113,9 @@ function AdminPanel({ currentUser, onBack }) {
     if (!window.confirm(`Are you sure you want to remove admin privileges from ${email}?`)) {
       return;
     }
+
+    // Add userId to loading set
+    setLoadingUsers(prev => new Set(prev).add(userId));
 
     try {
       const token = localStorage.getItem('authToken');
@@ -119,10 +133,17 @@ function AdminPanel({ currentUser, onBack }) {
       );
       
       alert('User role updated successfully!');
-      loadUsers(); // Refresh users list
+      await loadUsers(); // Refresh users list
     } catch (error) {
       console.error('Error updating user role:', error);
       alert(error.response?.data?.error || 'Failed to update user role');
+    } finally {
+      // Remove userId from loading set
+      setLoadingUsers(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(userId);
+        return newSet;
+      });
     }
   };
 
@@ -272,17 +293,35 @@ function AdminPanel({ currentUser, onBack }) {
                           <button
                             className="action-button make-admin"
                             onClick={() => makeAdmin(user._id, user.email)}
+                            disabled={loadingUsers.has(user._id)}
+                            title={loadingUsers.has(user._id) ? "Updating..." : "Make user an admin"}
                           >
-                            <FaUserShield /> Make Admin
+                            {loadingUsers.has(user._id) ? (
+                              <>
+                                <FaSpinner className="spinner" /> Updating...
+                              </>
+                            ) : (
+                              <>
+                                <FaUserShield /> Make Admin
+                              </>
+                            )}
                           </button>
                         ) : (
                           <button
                             className="action-button remove-admin"
                             onClick={() => removeAdmin(user._id, user.email)}
-                            disabled={user._id === currentUser?.userId}
-                            title={user._id === currentUser?.userId ? "Cannot remove your own admin privileges" : ""}
+                            disabled={user._id === currentUser?.userId || loadingUsers.has(user._id)}
+                            title={user._id === currentUser?.userId ? "Cannot remove your own admin privileges" : loadingUsers.has(user._id) ? "Updating..." : "Remove admin privileges"}
                           >
-                            <FaUser /> Remove Admin
+                            {loadingUsers.has(user._id) ? (
+                              <>
+                                <FaSpinner className="spinner" /> Updating...
+                              </>
+                            ) : (
+                              <>
+                                <FaUser /> Remove Admin
+                              </>
+                            )}
                           </button>
                         )}
                       </td>
