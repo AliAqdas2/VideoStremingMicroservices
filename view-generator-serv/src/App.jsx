@@ -87,6 +87,11 @@ function App() {
         const videoKey = video.dataset.videokey;
 
         if (entry.isIntersecting) {
+          // Don't auto-play if user manually paused this video
+          if (userPausedVideos.has(videoKey)) {
+            return;
+          }
+          
           // Ensure video is ready before playing
           if (video.readyState >= 2) {
             const playPromise = video.play();
@@ -101,6 +106,10 @@ function App() {
             // Wait for video to be ready
             video.addEventListener("canplay", function handleCanPlay() {
               video.removeEventListener("canplay", handleCanPlay);
+              // Check again if user paused while loading
+              if (userPausedVideos.has(videoKey)) {
+                return;
+              }
               const playPromise = video.play();
               if (playPromise !== undefined) {
                 playPromise
@@ -113,12 +122,19 @@ function App() {
             video.load(); // Trigger loading
           }
         } else {
+          // Video scrolled out of view - pause it and clear user pause state
           if (!video.paused) {
             video.pause();
           }
           if (playingVideo === videoKey) {
             setPlayingVideo(null);
           }
+          // Clear user paused state when scrolling away (so it auto-plays when scrolling back)
+          setUserPausedVideos(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(videoKey);
+            return newSet;
+          });
         }
       });
     }, options);
@@ -345,11 +361,19 @@ function App() {
     const video = videoRefs.current[videoKey];
     if (video) {
       if (video.paused) {
+        // User wants to play - remove from paused set
+        setUserPausedVideos(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(videoKey);
+          return newSet;
+        });
         video
           .play()
           .then(() => setPlayingVideo(videoKey))
           .catch(console.error);
       } else {
+        // User wants to pause - add to paused set so observer doesn't auto-play
+        setUserPausedVideos(prev => new Set(prev).add(videoKey));
         video.pause();
         setPlayingVideo(null);
       }
