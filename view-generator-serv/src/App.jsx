@@ -91,7 +91,7 @@ function App() {
           if (userPausedVideos.has(videoKey)) {
             return;
           }
-          
+
           // Ensure video is ready before playing
           if (video.readyState >= 2) {
             const playPromise = video.play();
@@ -130,7 +130,7 @@ function App() {
             setPlayingVideo(null);
           }
           // Clear user paused state when scrolling away (so it auto-plays when scrolling back)
-          setUserPausedVideos(prev => {
+          setUserPausedVideos((prev) => {
             const newSet = new Set(prev);
             newSet.delete(videoKey);
             return newSet;
@@ -362,7 +362,7 @@ function App() {
     if (video) {
       if (video.paused) {
         // User wants to play - remove from paused set
-        setUserPausedVideos(prev => {
+        setUserPausedVideos((prev) => {
           const newSet = new Set(prev);
           newSet.delete(videoKey);
           return newSet;
@@ -373,7 +373,7 @@ function App() {
           .catch(console.error);
       } else {
         // User wants to pause - add to paused set so observer doesn't auto-play
-        setUserPausedVideos(prev => new Set(prev).add(videoKey));
+        setUserPausedVideos((prev) => new Set(prev).add(videoKey));
         video.pause();
         setPlayingVideo(null);
       }
