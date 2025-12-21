@@ -1,11 +1,34 @@
-import React, { useState, useEffect, useRef, Fragment } from 'react';
-import axios from 'axios';
-import { FaVideo, FaUpload, FaTrash, FaUser, FaSignOutAlt, FaTimes, FaUserShield, FaSpinner } from 'react-icons/fa';
-import AdminPanel from './AdminPanel';
-import './App.css';
+import React, { useState, useEffect, useRef } from "react";
+import axios from "axios";
+import {
+  FaVideo,
+  FaUpload,
+  FaTrash,
+  FaSignOutAlt,
+  FaTimes,
+  FaUserShield,
+  FaSpinner,
+  FaPlay,
+  FaVolumeUp,
+  FaVolumeMute,
+  FaHeart,
+  FaShare,
+  FaChartBar,
+  FaCloud,
+  FaBolt,
+  FaShieldAlt,
+  FaRocket,
+  FaClock,
+  FaArrowRight,
+  FaPause,
+} from "react-icons/fa";
+import AdminPanel from "./AdminPanel";
+import "./App.css";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || window.API_BASE_URL || 'http://localhost:3005';
-const LOGGING_SERVICE_URL = import.meta.env.VITE_LOGGING_SERVICE_URL || 'http://localhost:3006';
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ||
+  window.API_BASE_URL ||
+  "http://localhost:3005";
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -14,24 +37,28 @@ function App() {
   const [videos, setVideos] = useState([]);
   const [storage, setStorage] = useState(null);
   const [usage, setUsage] = useState(null);
-  const [selectedVideos, setSelectedVideos] = useState(new Set());
   const [alert, setAlert] = useState(null);
   const [showDashboard, setShowDashboard] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
+  const [isMuted, setIsMuted] = useState(true);
+  const [playingVideo, setPlayingVideo] = useState(null);
+  const [userPausedVideos, setUserPausedVideos] = useState(new Set()); // Track videos manually paused by user
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [loading, setLoading] = useState({
     login: false,
     register: false,
     upload: false,
-    deletingVideos: new Set() // Track which videos are being deleted
+    deletingVideos: new Set(),
   });
   const videoRefs = useRef({});
   const containerRef = useRef(null);
+  const observerRef = useRef(null);
 
   // Check if user is already logged in
   useEffect(() => {
-    const token = localStorage.getItem('authToken');
-    const user = localStorage.getItem('currentUser');
+    const token = localStorage.getItem("authToken");
+    const user = localStorage.getItem("currentUser");
     if (token && user) {
       setIsAuthenticated(true);
       setCurrentUser(JSON.parse(user));
@@ -39,84 +66,82 @@ function App() {
     }
   }, []);
 
-  // Handle scroll for video playback
+  // Intersection Observer for video playback - Fixed version
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (!isAuthenticated || videos.length === 0) return;
 
-    const handleScroll = () => {
-      const container = containerRef.current;
-      if (!container) return;
+    // Clean up previous observer
+    if (observerRef.current) {
+      observerRef.current.disconnect();
+    }
 
-      const containerTop = container.scrollTop;
-      const containerHeight = container.clientHeight;
-      const centerPoint = containerTop + containerHeight / 2;
-      const buffer = 200; // Buffer zone to pause videos slightly outside viewport
+    const options = {
+      root: containerRef.current,
+      rootMargin: "0px",
+      threshold: 0.5,
+    };
 
-      Object.entries(videoRefs.current).forEach(([key, videoElement]) => {
-        if (!videoElement) return;
+    observerRef.current = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        const video = entry.target;
+        const videoKey = video.dataset.videokey;
 
-        const rect = videoElement.getBoundingClientRect();
-        const containerRect = container.getBoundingClientRect();
-        const videoTop = rect.top - containerRect.top + containerTop;
-        const videoBottom = videoTop + rect.height;
-        const videoCenter = videoTop + (videoBottom - videoTop) / 2;
-
-        // Check if video center is near viewport center (within buffer)
-        const distanceFromCenter = Math.abs(videoCenter - centerPoint);
-        const isInCenterView = distanceFromCenter < containerHeight / 2 + buffer;
-
-        if (isInCenterView) {
-          // Video is in center viewport - play it
-          if (videoElement.paused && videoElement.readyState >= 2) {
-            videoElement.play().catch(() => {
-              // Autoplay was prevented
-            });
-          }
-        } else {
-          // Video is out of center viewport - pause it
-          if (!videoElement.paused) {
-            videoElement.pause();
-          }
-          // Stop loading by setting currentTime to 0 and pausing
-          // With preload="none", browser won't load until play() is called
-          if (videoElement.readyState < 2) {
-            // If video hasn't loaded yet, cancel loading by removing the source
-            const source = videoElement.querySelector('source');
-            if (source && !source.dataset.originalSrc) {
-              source.dataset.originalSrc = source.src;
-              source.src = '';
-              videoElement.load();
+        if (entry.isIntersecting) {
+          // Ensure video is ready before playing
+          if (video.readyState >= 2) {
+            const playPromise = video.play();
+            if (playPromise !== undefined) {
+              playPromise
+                .then(() => setPlayingVideo(videoKey))
+                .catch((err) =>
+                  console.log("Autoplay prevented:", err.message)
+                );
             }
           } else {
-            // Video is loaded, just pause and reset currentTime to stop buffering
-            videoElement.currentTime = 0;
+            // Wait for video to be ready
+            video.addEventListener("canplay", function handleCanPlay() {
+              video.removeEventListener("canplay", handleCanPlay);
+              const playPromise = video.play();
+              if (playPromise !== undefined) {
+                playPromise
+                  .then(() => setPlayingVideo(videoKey))
+                  .catch((err) =>
+                    console.log("Autoplay prevented:", err.message)
+                  );
+              }
+            });
+            video.load(); // Trigger loading
           }
-        }
-
-        // Restore source if video comes back into view
-        if (isInCenterView) {
-          const source = videoElement.querySelector('source');
-          if (source && source.dataset.originalSrc && !source.src) {
-            source.src = source.dataset.originalSrc;
-            delete source.dataset.originalSrc;
-            videoElement.load();
+        } else {
+          if (!video.paused) {
+            video.pause();
+          }
+          if (playingVideo === videoKey) {
+            setPlayingVideo(null);
           }
         }
       });
-    };
+    }, options);
 
-    const container = containerRef.current;
-    container.addEventListener('scroll', handleScroll);
-    handleScroll(); // Initial check
+    // Delay to ensure refs are populated and DOM is ready
+    const timer = setTimeout(() => {
+      Object.entries(videoRefs.current).forEach(([key, video]) => {
+        if (video && observerRef.current) {
+          video.dataset.videokey = key;
+          observerRef.current.observe(video);
+        }
+      });
+    }, 200);
 
     return () => {
-      if (container) {
-        container.removeEventListener('scroll', handleScroll);
+      clearTimeout(timer);
+      if (observerRef.current) {
+        observerRef.current.disconnect();
       }
     };
-  }, [videos]);
+  }, [videos, isAuthenticated]);
 
-  const showAlertMessage = (message, type = 'info') => {
+  const showAlertMessage = (message, type = "info") => {
     setAlert({ message, type });
     setTimeout(() => setAlert(null), 5000);
   };
@@ -126,25 +151,25 @@ function App() {
     const email = e.target.email.value;
     const password = e.target.password.value;
 
-    setLoading(prev => ({ ...prev, login: true }));
+    setLoading((prev) => ({ ...prev, login: true }));
 
     try {
       const response = await axios.post(`${API_BASE_URL}/api/auth/login`, {
         email,
-        password
+        password,
       });
 
       const { token, user } = response.data;
-      localStorage.setItem('authToken', token);
-      localStorage.setItem('currentUser', JSON.stringify(user));
+      localStorage.setItem("authToken", token);
+      localStorage.setItem("currentUser", JSON.stringify(user));
       setIsAuthenticated(true);
       setCurrentUser(user);
-      showAlertMessage('Login successful!', 'success');
+      showAlertMessage("Welcome back! 🎉", "success");
       loadDashboard(token);
     } catch (error) {
-      showAlertMessage(error.response?.data?.error || 'Login failed', 'error');
+      showAlertMessage(error.response?.data?.error || "Login failed", "error");
     } finally {
-      setLoading(prev => ({ ...prev, login: false }));
+      setLoading((prev) => ({ ...prev, login: false }));
     }
   };
 
@@ -154,39 +179,42 @@ function App() {
     const email = e.target.email.value;
     const password = e.target.password.value;
 
-    setLoading(prev => ({ ...prev, register: true }));
+    setLoading((prev) => ({ ...prev, register: true }));
 
     try {
       await axios.post(`${API_BASE_URL}/api/auth/register`, {
         username,
         email,
-        password
+        password,
       });
 
-      showAlertMessage('Registration successful! Please login.', 'success');
+      showAlertMessage(
+        "Account created successfully! Please login.",
+        "success"
+      );
       setShowRegister(false);
     } catch (error) {
-      showAlertMessage(error.response?.data?.error || 'Registration failed', 'error');
+      showAlertMessage(
+        error.response?.data?.error || "Registration failed",
+        "error"
+      );
     } finally {
-      setLoading(prev => ({ ...prev, register: false }));
+      setLoading((prev) => ({ ...prev, register: false }));
     }
   };
 
   const logout = () => {
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('currentUser');
+    localStorage.removeItem("authToken");
+    localStorage.removeItem("currentUser");
     setIsAuthenticated(false);
     setCurrentUser(null);
     setVideos([]);
-    setSelectedVideos(new Set());
-    setShowLogs(false);
-    setLogs([]);
   };
 
-  const loadDashboard = async (token = localStorage.getItem('authToken')) => {
+  const loadDashboard = async (token = localStorage.getItem("authToken")) => {
     try {
       const response = await axios.get(`${API_BASE_URL}/api/dashboard`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
 
       setStorage(response.data.storage);
@@ -194,32 +222,32 @@ function App() {
       loadVideos(token);
     } catch (error) {
       if (error.response?.status === 401) {
-        showAlertMessage('Session expired. Please login again.', 'error');
+        showAlertMessage("Session expired. Please login again.", "error");
         logout();
       } else {
-        showAlertMessage('Failed to load dashboard', 'error');
+        showAlertMessage("Failed to load dashboard", "error");
       }
     }
   };
 
-  const loadVideos = async (token = localStorage.getItem('authToken')) => {
+  const loadVideos = async (token = localStorage.getItem("authToken")) => {
     try {
-      // Load public feed (all users' videos)
       const response = await axios.get(`${API_BASE_URL}/api/videos/public`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
 
-      setVideos(response.data.videos || []);
+      const videosData = response.data.videos || [];
+      console.log("Loaded videos:", videosData.length);
+      setVideos(videosData);
     } catch (error) {
       if (error.response?.status === 401) {
-        showAlertMessage('Session expired. Please login again.', 'error');
+        showAlertMessage("Session expired. Please login again.", "error");
         logout();
       } else {
-        showAlertMessage('Failed to load videos', 'error');
+        showAlertMessage("Failed to load videos", "error");
       }
     }
   };
-
 
   const uploadVideo = async (e) => {
     e.preventDefault();
@@ -227,64 +255,76 @@ function App() {
     const file = fileInput.files[0];
 
     if (!file) {
-      showAlertMessage('Please select a video file', 'warning');
+      showAlertMessage("Please select a video file", "warning");
       return;
     }
 
-    setLoading(prev => ({ ...prev, upload: true }));
+    setLoading((prev) => ({ ...prev, upload: true }));
+    setUploadProgress(0);
 
     const formData = new FormData();
-    formData.append('video', file);
+    formData.append("video", file);
 
     try {
-      const token = localStorage.getItem('authToken');
+      const token = localStorage.getItem("authToken");
       await axios.post(`${API_BASE_URL}/api/videos/upload`, formData, {
         headers: {
           Authorization: `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data'
-        }
+          "Content-Type": "multipart/form-data",
+        },
+        onUploadProgress: (progressEvent) => {
+          const progress = Math.round(
+            (progressEvent.loaded * 100) / progressEvent.total
+          );
+          setUploadProgress(progress);
+        },
       });
 
-      showAlertMessage('Video uploaded successfully!', 'success');
-      fileInput.value = '';
+      showAlertMessage("Video uploaded successfully! 🎬", "success");
+      fileInput.value = "";
       setShowUpload(false);
+      setUploadProgress(0);
       loadDashboard(token);
     } catch (error) {
-      showAlertMessage(error.response?.data?.error || error.response?.data?.message || 'Upload failed', 'error');
+      showAlertMessage(
+        error.response?.data?.error ||
+          error.response?.data?.message ||
+          "Upload failed",
+        "error"
+      );
     } finally {
-      setLoading(prev => ({ ...prev, upload: false }));
+      setLoading((prev) => ({ ...prev, upload: false }));
+      setUploadProgress(0);
     }
   };
 
   const deleteVideo = async (filename) => {
-    if (!window.confirm('Are you sure you want to delete this video?')) {
+    if (!window.confirm("Are you sure you want to delete this video?")) {
       return;
     }
 
-    // Add filename to deleting set
-    setLoading(prev => ({
+    setLoading((prev) => ({
       ...prev,
-      deletingVideos: new Set(prev.deletingVideos).add(filename)
+      deletingVideos: new Set(prev.deletingVideos).add(filename),
     }));
 
     try {
-      const token = localStorage.getItem('authToken');
+      const token = localStorage.getItem("authToken");
       await axios.delete(`${API_BASE_URL}/api/videos/${filename}`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
 
-      showAlertMessage('Video deleted successfully', 'success');
+      showAlertMessage("Video deleted successfully", "success");
       loadDashboard(token);
     } catch (error) {
       if (error.response?.status === 401) {
-        showAlertMessage('Session expired. Please login again.', 'error');
+        showAlertMessage("Session expired. Please login again.", "error");
         logout();
       } else {
-        showAlertMessage('Failed to delete video', 'error');
+        showAlertMessage("Failed to delete video", "error");
       }
     } finally {
-      // Remove filename from deleting set
-      setLoading(prev => {
+      setLoading((prev) => {
         const newSet = new Set(prev.deletingVideos);
         newSet.delete(filename);
         return { ...prev, deletingVideos: newSet };
@@ -292,363 +332,660 @@ function App() {
     }
   };
 
-  const isAdmin = currentUser?.role === 'admin';
+  const toggleMute = (e) => {
+    e.stopPropagation();
+    const newMuted = !isMuted;
+    setIsMuted(newMuted);
+    Object.values(videoRefs.current).forEach((video) => {
+      if (video) video.muted = newMuted;
+    });
+  };
 
+  const togglePlay = (videoKey) => {
+    const video = videoRefs.current[videoKey];
+    if (video) {
+      if (video.paused) {
+        video
+          .play()
+          .then(() => setPlayingVideo(videoKey))
+          .catch(console.error);
+      } else {
+        video.pause();
+        setPlayingVideo(null);
+      }
+    }
+  };
+
+  const isAdmin = currentUser?.role === "admin";
   const storagePercent = storage ? parseFloat(storage.usagePercent) : 0;
   const bandwidthPercent = usage ? parseFloat(usage.usagePercent) : 0;
 
-  return (
-    <div className="app-container">
-      {!isAuthenticated ? (
-        <div className="auth-page">
-          <div className="auth-container">
-            <div className="auth-header">
-              <div className="logo-section">
-                <FaVideo className="logo-icon" />
-                <h1>Short Video Platform</h1>
-                <p className="tagline">Share your moments, discover amazing content</p>
+  // Landing Page
+  if (!isAuthenticated) {
+    return (
+      <div className="landing-page">
+        <div className="landing-bg">
+          <div className="gradient-orb orb-1"></div>
+          <div className="gradient-orb orb-2"></div>
+          <div className="gradient-orb orb-3"></div>
+          <div className="grid-overlay"></div>
+        </div>
+
+        <nav className="landing-nav">
+          <div className="nav-brand">
+            <div className="brand-icon">
+              <FaVideo />
+            </div>
+            <span className="brand-name">StreamVault</span>
+          </div>
+          <div className="nav-actions">
+            <button
+              className="nav-btn nav-btn-ghost"
+              onClick={() => setShowRegister(false)}
+            >
+              Sign In
+            </button>
+            <button
+              className="nav-btn nav-btn-primary"
+              onClick={() => setShowRegister(true)}
+            >
+              Get Started
+            </button>
+          </div>
+        </nav>
+
+        <section className="hero-section">
+          <div className="hero-content">
+            <div className="hero-badge">
+              <FaRocket className="badge-icon" />
+              <span>Next-Gen Video Platform</span>
+            </div>
+            <h1 className="hero-title">
+              Share Your Story
+              <span className="gradient-text"> With The World</span>
+            </h1>
+            <p className="hero-description">
+              StreamVault is the ultimate platform for creators. Upload, share,
+              and discover short-form videos with lightning-fast streaming and
+              enterprise-grade security.
+            </p>
+            <div className="hero-cta">
+              <button
+                className="cta-primary"
+                onClick={() => setShowRegister(true)}
+              >
+                Start Creating
+                <FaArrowRight className="cta-icon" />
+              </button>
+              <button
+                className="cta-secondary"
+                onClick={() => setShowRegister(false)}
+              >
+                <FaPlay className="cta-icon" />
+                Watch Demo
+              </button>
+            </div>
+            <div className="hero-stats">
+              <div className="stat-item">
+                <span className="stat-number">50MB</span>
+                <span className="stat-label">Free Storage</span>
+              </div>
+              <div className="stat-divider"></div>
+              <div className="stat-item">
+                <span className="stat-number">100MB</span>
+                <span className="stat-label">Daily Bandwidth</span>
+              </div>
+              <div className="stat-divider"></div>
+              <div className="stat-item">
+                <span className="stat-number">4K</span>
+                <span className="stat-label">Max Quality</span>
               </div>
             </div>
+          </div>
 
-            <div className="auth-card">
-              <div className="auth-tabs">
-                <button
-                  className={`auth-tab ${!showRegister ? 'active' : ''}`}
-                  onClick={() => setShowRegister(false)}
-                >
-                  Login
-                </button>
-                <button
-                  className={`auth-tab ${showRegister ? 'active' : ''}`}
-                  onClick={() => setShowRegister(true)}
-                >
-                  Sign Up
-                </button>
+          <div className="hero-auth">
+            <div className="auth-card-modern">
+              <div className="auth-card-header">
+                <h2>{showRegister ? "Create Account" : "Welcome Back"}</h2>
+                <p>
+                  {showRegister
+                    ? "Join thousands of creators"
+                    : "Sign in to continue"}
+                </p>
               </div>
 
               {!showRegister ? (
-                <form className="auth-form-content" onSubmit={login}>
-                  <div className="form-group">
-                    <label htmlFor="login-email">Email Address</label>
+                <form className="auth-form-modern" onSubmit={login}>
+                  <div className="input-group">
+                    <label>Email Address</label>
                     <input
                       type="email"
-                      id="login-email"
                       name="email"
-                      placeholder="Enter your email"
+                      placeholder="you@example.com"
                       required
                     />
                   </div>
-                  <div className="form-group">
-                    <label htmlFor="login-password">Password</label>
+                  <div className="input-group">
+                    <label>Password</label>
                     <input
                       type="password"
-                      id="login-password"
                       name="password"
-                      placeholder="Enter your password"
+                      placeholder="••••••••"
                       required
                     />
-                  </div>
-                  <button type="submit" className="auth-submit-button" disabled={loading.login}>
-                    {loading.login ? (
-                      <>
-                        <FaSpinner className="spinner" /> Logging in...
-                      </>
-                    ) : (
-                      <span>Login</span>
-                    )}
-                  </button>
-                  <div className="auth-divider">
-                    <span>New to the platform?</span>
                   </div>
                   <button
-                    type="button"
-                    className="auth-switch-button"
-                    onClick={() => setShowRegister(true)}
+                    type="submit"
+                    className="auth-submit-modern"
+                    disabled={loading.login}
                   >
-                    Create an account
+                    {loading.login ? (
+                      <>
+                        <FaSpinner className="spinner" />
+                        <span>Signing in...</span>
+                      </>
+                    ) : (
+                      <span>Sign In</span>
+                    )}
                   </button>
+                  <p className="auth-switch">
+                    Don't have an account?{" "}
+                    <button type="button" onClick={() => setShowRegister(true)}>
+                      Create one
+                    </button>
+                  </p>
                 </form>
               ) : (
-                <form className="auth-form-content" onSubmit={register}>
-                  <div className="form-group">
-                    <label htmlFor="register-username">Username</label>
+                <form className="auth-form-modern" onSubmit={register}>
+                  <div className="input-group">
+                    <label>Username</label>
                     <input
                       type="text"
-                      id="register-username"
                       name="username"
-                      placeholder="Choose a username"
+                      placeholder="johndoe"
                       required
                     />
                   </div>
-                  <div className="form-group">
-                    <label htmlFor="register-email">Email Address</label>
+                  <div className="input-group">
+                    <label>Email Address</label>
                     <input
                       type="email"
-                      id="register-email"
                       name="email"
-                      placeholder="Enter your email"
+                      placeholder="you@example.com"
                       required
                     />
                   </div>
-                  <div className="form-group">
-                    <label htmlFor="register-password">Password</label>
+                  <div className="input-group">
+                    <label>Password</label>
                     <input
                       type="password"
-                      id="register-password"
                       name="password"
-                      placeholder="Create a password"
+                      placeholder="••••••••"
                       required
                     />
                   </div>
-                  <button type="submit" className="auth-submit-button" disabled={loading.register}>
+                  <button
+                    type="submit"
+                    className="auth-submit-modern"
+                    disabled={loading.register}
+                  >
                     {loading.register ? (
                       <>
-                        <FaSpinner className="spinner" /> Creating Account...
+                        <FaSpinner className="spinner" />
+                        <span>Creating account...</span>
                       </>
                     ) : (
                       <span>Create Account</span>
                     )}
                   </button>
-                  <div className="auth-divider">
-                    <span>Already have an account?</span>
-                  </div>
-                  <button
-                    type="button"
-                    className="auth-switch-button"
-                    onClick={() => setShowRegister(false)}
-                  >
-                    Sign in instead
-                  </button>
+                  <p className="auth-switch">
+                    Already have an account?{" "}
+                    <button
+                      type="button"
+                      onClick={() => setShowRegister(false)}
+                    >
+                      Sign in
+                    </button>
+                  </p>
                 </form>
               )}
+            </div>
+          </div>
+        </section>
 
-              <div className="auth-features">
-                <div className="feature-item">
-                  <FaVideo className="feature-icon" />
-                  <div>
-                    <h4>Upload & Share</h4>
-                    <p>Share your short videos with the community</p>
+        <section className="features-section">
+          <div className="features-header">
+            <span className="features-badge">Features</span>
+            <h2>Everything you need to create and share</h2>
+            <p>Powerful tools for modern content creators</p>
+          </div>
+          <div className="features-grid">
+            <div className="feature-card">
+              <div className="feature-icon">
+                <FaCloud />
+              </div>
+              <h3>Cloud Storage</h3>
+              <p>
+                Your videos are securely stored in the cloud with automatic
+                backups and global CDN delivery.
+              </p>
+            </div>
+            <div className="feature-card">
+              <div className="feature-icon">
+                <FaBolt />
+              </div>
+              <h3>Lightning Fast</h3>
+              <p>
+                Experience instant uploads and smooth playback with our
+                optimized streaming infrastructure.
+              </p>
+            </div>
+            <div className="feature-card">
+              <div className="feature-icon">
+                <FaShieldAlt />
+              </div>
+              <h3>Secure & Private</h3>
+              <p>
+                Enterprise-grade security with encrypted storage and granular
+                access controls.
+              </p>
+            </div>
+            <div className="feature-card">
+              <div className="feature-icon">
+                <FaChartBar />
+              </div>
+              <h3>Analytics</h3>
+              <p>
+                Track your video performance with detailed analytics and
+                engagement metrics.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {alert && (
+          <div className="alert-container">
+            <div className={`alert-modern alert-${alert.type}`}>
+              <span>{alert.message}</span>
+              <button onClick={() => setAlert(null)}>
+                <FaTimes />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (showAdminPanel) {
+    return (
+      <AdminPanel
+        currentUser={currentUser}
+        onBack={() => setShowAdminPanel(false)}
+      />
+    );
+  }
+
+  // Main App
+  return (
+    <div className="app-main">
+      <header className="app-header-modern">
+        <div className="header-left">
+          <div className="brand-icon-small">
+            <FaVideo />
+          </div>
+          <span className="brand-name-small">StreamVault</span>
+        </div>
+
+        <div className="header-right">
+          <button
+            className="header-btn"
+            onClick={() => setShowUpload(true)}
+            title="Upload"
+          >
+            <FaUpload />
+            <span>Upload</span>
+          </button>
+          <button
+            className="header-btn-icon"
+            onClick={() => setShowDashboard(true)}
+            title="Dashboard"
+          >
+            <FaChartBar />
+          </button>
+          {isAdmin && (
+            <button
+              className="header-btn-icon"
+              onClick={() => setShowAdminPanel(true)}
+              title="Admin"
+            >
+              <FaUserShield />
+            </button>
+          )}
+          <div className="user-menu">
+            <div className="user-avatar">
+              {currentUser?.username?.charAt(0).toUpperCase() || "U"}
+            </div>
+            <div className="user-dropdown">
+              <div className="user-info-dropdown">
+                <span className="user-name">{currentUser?.username}</span>
+                <span className="user-email">{currentUser?.email}</span>
+              </div>
+              <div className="dropdown-divider"></div>
+              <button onClick={logout} className="dropdown-item logout-item">
+                <FaSignOutAlt />
+                <span>Sign Out</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main className="video-feed" ref={containerRef}>
+        {videos.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-icon">
+              <FaVideo />
+            </div>
+            <h2>No videos yet</h2>
+            <p>Be the first to share something amazing!</p>
+            <button onClick={() => setShowUpload(true)} className="empty-cta">
+              <FaUpload />
+              <span>Upload Your First Video</span>
+            </button>
+          </div>
+        ) : (
+          videos.map((video) => {
+            const videoUserId = video.userId || currentUser.userId;
+            const videoKey = `${videoUserId}-${video.filename}`;
+            // Always use the stream endpoint - it handles both GCS (via signed URL redirect) and local files
+            const videoUrl = `${API_BASE_URL}/api/videos/stream/${videoUserId}/${
+              video.filename
+            }?token=${localStorage.getItem("authToken")}`;
+            const isCurrentlyPlaying = playingVideo === videoKey;
+
+            return (
+              <div key={videoKey} className="video-card">
+                <div
+                  className="video-wrapper"
+                  onClick={() => togglePlay(videoKey)}
+                >
+                  <video
+                    ref={(el) => {
+                      if (el) videoRefs.current[videoKey] = el;
+                    }}
+                    className="video-player-modern"
+                    loop
+                    playsInline
+                    muted={isMuted}
+                    preload="auto"
+                    src={videoUrl}
+                    data-videokey={videoKey}
+                    controls
+                    onLoadedData={() =>
+                      console.log(`Video loaded: ${videoKey}`)
+                    }
+                    onError={(e) =>
+                      console.error(
+                        `Video error for ${videoKey}:`,
+                        e.target.error
+                      )
+                    }
+                  />
+
+                  {/* Play/Pause indicator - shows on hover */}
+                  <div
+                    className="play-indicator"
+                    onClick={() => togglePlay(videoKey)}
+                  >
+                    {isCurrentlyPlaying ? <FaPause /> : <FaPlay />}
+                  </div>
+
+                  <div className="video-controls-overlay">
+                    <button
+                      className="control-btn mute-btn"
+                      onClick={toggleMute}
+                    >
+                      {isMuted ? <FaVolumeMute /> : <FaVolumeUp />}
+                    </button>
+                  </div>
+
+                  <div className="video-info-overlay">
+                    <div className="video-meta">
+                      <div className="video-author">
+                        <div className="author-avatar">
+                          {video.username?.charAt(0).toUpperCase() || "U"}
+                        </div>
+                        <div className="author-info">
+                          <span className="author-name">
+                            @{video.username || "user"}
+                          </span>
+                          <span className="video-date">
+                            <FaClock />{" "}
+                            {new Date(video.uploadedAt).toLocaleDateString()}
+                          </span>
+                        </div>
+                      </div>
+                      <h3 className="video-title">{video.originalName}</h3>
+                    </div>
+                  </div>
+
+                  <div className="video-actions">
+                    <button className="action-btn">
+                      <FaHeart />
+                      <span>0</span>
+                    </button>
+                    <button className="action-btn">
+                      <FaShare />
+                    </button>
+                    {videoUserId === currentUser.userId && (
+                      <button
+                        className="action-btn delete-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteVideo(video.filename);
+                        }}
+                        disabled={loading.deletingVideos.has(video.filename)}
+                      >
+                        {loading.deletingVideos.has(video.filename) ? (
+                          <FaSpinner className="spinner" />
+                        ) : (
+                          <FaTrash />
+                        )}
+                      </button>
+                    )}
                   </div>
                 </div>
-                <div className="feature-item">
-                  <FaUser className="feature-icon" />
-                  <div>
-                    <h4>50MB Storage</h4>
-                    <p>Get 50MB of free storage for your videos</p>
-                  </div>
+              </div>
+            );
+          })
+        )}
+      </main>
+
+      {showDashboard && (
+        <div className="modal-overlay" onClick={() => setShowDashboard(false)}>
+          <div className="modal-modern" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header-modern">
+              <h2>Dashboard</h2>
+              <button
+                className="modal-close"
+                onClick={() => setShowDashboard(false)}
+              >
+                <FaTimes />
+              </button>
+            </div>
+            <div className="dashboard-content">
+              <div className="dashboard-card">
+                <div className="dashboard-card-header">
+                  <FaCloud className="dashboard-icon" />
+                  <h3>Storage Usage</h3>
                 </div>
-                <div className="feature-item">
-                  <FaUpload className="feature-icon" />
-                  <div>
-                    <h4>100MB Daily</h4>
-                    <p>100MB daily bandwidth for uploads</p>
-                  </div>
+                <div className="progress-modern">
+                  <div
+                    className="progress-fill-modern"
+                    style={{
+                      width: `${Math.min(storagePercent, 100)}%`,
+                      background:
+                        storagePercent >= 90
+                          ? "linear-gradient(90deg, #ef4444, #dc2626)"
+                          : storagePercent >= 70
+                          ? "linear-gradient(90deg, #f59e0b, #d97706)"
+                          : "linear-gradient(90deg, #667eea, #764ba2)",
+                    }}
+                  ></div>
+                </div>
+                <div className="dashboard-stats">
+                  <span>
+                    {storage
+                      ? `${(storage.usedStorage / (1024 * 1024)).toFixed(2)} MB`
+                      : "0 MB"}
+                  </span>
+                  <span>
+                    {storage
+                      ? `${(storage.maxStorage / (1024 * 1024)).toFixed(2)} MB`
+                      : "50 MB"}
+                  </span>
+                </div>
+              </div>
+
+              <div className="dashboard-card">
+                <div className="dashboard-card-header">
+                  <FaBolt className="dashboard-icon" />
+                  <h3>Daily Bandwidth</h3>
+                </div>
+                <div className="progress-modern">
+                  <div
+                    className="progress-fill-modern"
+                    style={{
+                      width: `${Math.min(bandwidthPercent, 100)}%`,
+                      background:
+                        bandwidthPercent >= 90
+                          ? "linear-gradient(90deg, #ef4444, #dc2626)"
+                          : bandwidthPercent >= 70
+                          ? "linear-gradient(90deg, #f59e0b, #d97706)"
+                          : "linear-gradient(90deg, #667eea, #764ba2)",
+                    }}
+                  ></div>
+                </div>
+                <div className="dashboard-stats">
+                  <span>
+                    {usage
+                      ? `${(usage.totalVolume / (1024 * 1024)).toFixed(2)} MB`
+                      : "0 MB"}
+                  </span>
+                  <span>
+                    {usage
+                      ? `${(usage.maxDailyBandwidth / (1024 * 1024)).toFixed(
+                          2
+                        )} MB`
+                      : "100 MB"}
+                  </span>
+                </div>
+              </div>
+
+              <div className="dashboard-card full-width">
+                <div className="dashboard-card-header">
+                  <FaVideo className="dashboard-icon" />
+                  <h3>Your Videos</h3>
+                </div>
+                <div className="dashboard-video-count">
+                  <span className="count">
+                    {
+                      videos.filter((v) => v.userId === currentUser.userId)
+                        .length
+                    }
+                  </span>
+                  <span className="label">Videos Uploaded</span>
                 </div>
               </div>
             </div>
           </div>
         </div>
-      ) : showAdminPanel ? (
-        <AdminPanel currentUser={currentUser} onBack={() => setShowAdminPanel(false)} />
-      ) : (
-        <Fragment>
-          <header className="app-header">
-            <div className="header-content">
-              <h1>
-                <FaVideo /> Short Video Platform
-              </h1>
-              <div className="user-info">
-                <span>Welcome, {currentUser?.username}</span>
-                <div className="header-actions">
-                  {isAdmin && (
-                    <button className="icon-button" onClick={() => setShowAdminPanel(true)} title="Admin Panel">
-                      <FaUserShield />
-                    </button>
-                  )}
-                  <button className="icon-button" onClick={() => setShowDashboard(!showDashboard)} title="Dashboard">
-                    <FaUser />
-                  </button>
-                  <button className="icon-button" onClick={() => setShowUpload(!showUpload)} title="Upload">
+      )}
+
+      {showUpload && (
+        <div className="modal-overlay" onClick={() => setShowUpload(false)}>
+          <div
+            className="modal-modern upload-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-header-modern">
+              <h2>Upload Video</h2>
+              <button
+                className="modal-close"
+                onClick={() => setShowUpload(false)}
+              >
+                <FaTimes />
+              </button>
+            </div>
+            <form className="upload-form-modern" onSubmit={uploadVideo}>
+              <div className="upload-dropzone">
+                <input
+                  type="file"
+                  name="video"
+                  id="video-input"
+                  accept="video/*"
+                  onChange={(e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                      document.getElementById("file-info").textContent = `${
+                        file.name
+                      } (${(file.size / (1024 * 1024)).toFixed(2)} MB)`;
+                      document.getElementById("upload-btn").disabled = false;
+                    }
+                  }}
+                />
+                <label htmlFor="video-input" className="dropzone-content">
+                  <FaUpload className="dropzone-icon" />
+                  <span className="dropzone-text">Click to select a video</span>
+                  <span className="dropzone-hint">
+                    MP4, WebM, MOV up to 50MB
+                  </span>
+                </label>
+              </div>
+              <p id="file-info" className="file-info"></p>
+              {loading.upload && (
+                <div className="upload-progress">
+                  <div className="progress-modern">
+                    <div
+                      className="progress-fill-modern"
+                      style={{ width: `${uploadProgress}%` }}
+                    ></div>
+                  </div>
+                  <span>{uploadProgress}%</span>
+                </div>
+              )}
+              <button
+                type="submit"
+                id="upload-btn"
+                className="upload-submit"
+                disabled={loading.upload}
+              >
+                {loading.upload ? (
+                  <>
+                    <FaSpinner className="spinner" />
+                    <span>Uploading...</span>
+                  </>
+                ) : (
+                  <>
                     <FaUpload />
-                  </button>
-                  <button className="icon-button" onClick={logout} title="Logout">
-                    <FaSignOutAlt />
-                  </button>
-                </div>
-              </div>
-            </div>
-          </header>
-          {/* Dashboard Modal */}
-          {showDashboard && (
-            <div className="modal-overlay" onClick={() => setShowDashboard(false)}>
-              <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-                <div className="modal-header">
-                  <h2>Dashboard</h2>
-                  <button className="close-button" onClick={() => setShowDashboard(false)}>
-                    <FaTimes />
-                  </button>
-                </div>
-                <div className="stats-grid">
-                  <div className="stat-card">
-                    <h3>Storage Usage</h3>
-                    <div className="progress-bar">
-                      <div
-                        className="progress-fill"
-                        style={{
-                          width: `${Math.min(storagePercent, 100)}%`,
-                          background:
-                            storagePercent >= 100
-                              ? '#dc3545'
-                              : storagePercent >= 80
-                              ? '#ffc107'
-                              : '#667eea'
-                        }}
-                      ></div>
-                    </div>
-                    <p>
-                      {storage
-                        ? `${(storage.usedStorage / (1024 * 1024)).toFixed(2)} MB / ${(storage.maxStorage / (1024 * 1024)).toFixed(2)} MB`
-                        : '0 MB / 50 MB'}
-                    </p>
-                  </div>
-                  <div className="stat-card">
-                    <h3>Daily Bandwidth</h3>
-                    <div className="progress-bar">
-                      <div
-                        className="progress-fill"
-                        style={{
-                          width: `${Math.min(bandwidthPercent, 100)}%`,
-                          background:
-                            bandwidthPercent >= 100 || usage?.blocked
-                              ? '#dc3545'
-                              : bandwidthPercent >= 80
-                              ? '#ffc107'
-                              : '#667eea'
-                        }}
-                      ></div>
-                    </div>
-                    <p>
-                      {usage
-                        ? `${(usage.totalVolume / (1024 * 1024)).toFixed(2)} MB / ${(usage.maxDailyBandwidth / (1024 * 1024)).toFixed(2)} MB`
-                        : '0 MB / 100 MB'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Upload Modal */}
-          {showUpload && (
-            <div className="modal-overlay" onClick={() => setShowUpload(false)}>
-              <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-                <div className="modal-header">
-                  <h2>Upload Video</h2>
-                  <button className="close-button" onClick={() => setShowUpload(false)}>
-                    <FaTimes />
-                  </button>
-                </div>
-                <form className="upload-form" onSubmit={uploadVideo}>
-                  <input
-                    type="file"
-                    name="video"
-                    id="video-input"
-                    accept="video/*"
-                    style={{ display: 'none' }}
-                    onChange={(e) => {
-                      const file = e.target.files[0];
-                      if (file) {
-                        document.getElementById('selected-file').textContent = `Selected: ${file.name} (${(file.size / (1024 * 1024)).toFixed(2)} MB)`;
-                        document.getElementById('upload-btn').disabled = false;
-                      }
-                    }}
-                  />
-                  <button
-                    type="button"
-                    className="choose-file-button"
-                    onClick={() => document.getElementById('video-input').click()}
-                  >
-                    <FaUpload /> Choose Video
-                  </button>
-                  <span id="selected-file" className="selected-file"></span>
-                  <button type="submit" id="upload-btn" className="upload-button" disabled={loading.upload}>
-                    {loading.upload ? (
-                      <>
-                        <FaSpinner className="spinner" /> Uploading...
-                      </>
-                    ) : (
-                      'Upload'
-                    )}
-                  </button>
-                </form>
-              </div>
-            </div>
-          )}
-
-          {/* TikTok-Style Video Feed */}
-          <main className="video-feed-container" ref={containerRef}>
-            {videos.length === 0 ? (
-              <div className="no-videos">
-                <FaVideo size={64} />
-                <p>No videos uploaded yet.</p>
-                <button onClick={() => setShowUpload(true)} className="upload-first-button">
-                  <FaUpload /> Upload Your First Video
-                </button>
-              </div>
-            ) : (
-              videos.map((video, index) => {
-                const videoUserId = video.userId || currentUser.userId;
-                const videoKey = `${videoUserId}-${video.filename}`;
-                return (
-                  <div key={videoKey} className="video-item">
-                    <video
-                      ref={(el) => {
-                        if (el) videoRefs.current[videoKey] = el;
-                      }}
-                      className="video-player"
-                      controls
-                      playsInline
-                      preload="none"
-                      muted
-                    >
-                      <source
-                        src={video.gcsUrl || `${API_BASE_URL}/api/videos/stream/${videoUserId}/${video.filename}?token=${localStorage.getItem('authToken')}`}
-                        type="video/mp4"
-                      />
-                      Your browser does not support the video tag.
-                    </video>
-                    <div className="video-overlay">
-                      <div className="video-info">
-                        <h3>{video.originalName}</h3>
-                        <p>{new Date(video.uploadedAt).toLocaleString()}</p>
-                        <p className="video-size">{(video.size / (1024 * 1024)).toFixed(2)} MB</p>
-                      </div>
-                      {videoUserId === currentUser.userId && (
-                        <button
-                          className="video-delete-button"
-                          onClick={() => deleteVideo(video.filename)}
-                          disabled={loading.deletingVideos.has(video.filename)}
-                          title={loading.deletingVideos.has(video.filename) ? "Deleting..." : "Delete Video"}
-                        >
-                          {loading.deletingVideos.has(video.filename) ? (
-                            <FaSpinner className="spinner" />
-                          ) : (
-                            <FaTrash />
-                          )}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </main>
-        </Fragment>
+                    <span>Upload Video</span>
+                  </>
+                )}
+              </button>
+            </form>
+          </div>
+        </div>
       )}
 
       {alert && (
         <div className="alert-container">
-          <div className={`alert alert-${alert.type}`}>{alert.message}</div>
+          <div className={`alert-modern alert-${alert.type}`}>
+            <span>{alert.message}</span>
+            <button onClick={() => setAlert(null)}>
+              <FaTimes />
+            </button>
+          </div>
         </div>
       )}
     </div>
