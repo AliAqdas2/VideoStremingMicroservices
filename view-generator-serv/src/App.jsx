@@ -443,10 +443,14 @@ function App() {
               </button>
               <button
                 className="cta-secondary"
-                onClick={() => setShowRegister(false)}
+                onClick={() =>
+                  document
+                    .getElementById("features")
+                    .scrollIntoView({ behavior: "smooth" })
+                }
               >
-                <FaPlay className="cta-icon" />
-                Watch Demo
+                <FaArrowRight className="cta-icon" />
+                Explore Features
               </button>
             </div>
             <div className="hero-stats">
@@ -577,7 +581,7 @@ function App() {
           </div>
         </section>
 
-        <section className="features-section">
+        <section id="features" className="features-section">
           <div className="features-header">
             <span className="features-badge">Features</span>
             <h2>Everything you need to create and share</h2>
