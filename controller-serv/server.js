@@ -129,21 +129,29 @@ async function uploadToGCS(fileBuffer, fileName, userId, originalName) {
     },
   };
 
-  // Upload file
-  await file.save(fileBuffer, {
-    metadata: metadata,
-    resumable: false,
+  // Upload file using a promise wrapper for better error handling
+  return new Promise((resolve, reject) => {
+    const stream = file.createWriteStream({
+      metadata: metadata,
+      resumable: false,
+    });
+
+    stream.on("error", (err) => {
+      console.error("GCS upload stream error:", err.message);
+      reject(err);
+    });
+
+    stream.on("finish", () => {
+      resolve({
+        gcsFileName,
+        gcsPath: gcsFileName,
+        // No publicUrl - files are private and accessed via signed URLs
+      });
+    });
+
+    // Write buffer to stream
+    stream.end(fileBuffer);
   });
-
-  // Note: With uniform bucket-level access enabled, we cannot use makePublic()
-  // Instead, we use signed URLs for secure, time-limited access to files
-  // The signed URL will be generated when streaming the video
-
-  return {
-    gcsFileName,
-    gcsPath: gcsFileName,
-    // No publicUrl - files are private and accessed via signed URLs
-  };
 }
 
 // Helper function to delete file from GCS
@@ -198,13 +206,19 @@ async function verifyToken(token) {
     }
 
     // Validate JWT_SECRET before using it
-    if (!JWT_SECRET || typeof JWT_SECRET !== 'string' || JWT_SECRET.trim() === '') {
+    if (
+      !JWT_SECRET ||
+      typeof JWT_SECRET !== "string" ||
+      JWT_SECRET.trim() === ""
+    ) {
       console.error("CRITICAL: JWT_SECRET is not properly configured:", {
         exists: !!JWT_SECRET,
         type: typeof JWT_SECRET,
-        isEmpty: JWT_SECRET ? JWT_SECRET.trim() === '' : true
+        isEmpty: JWT_SECRET ? JWT_SECRET.trim() === "" : true,
       });
-      throw new Error("Server configuration error: JWT_SECRET not properly set");
+      throw new Error(
+        "Server configuration error: JWT_SECRET not properly set"
+      );
     }
 
     // First try to verify JWT token locally
@@ -316,7 +330,9 @@ const authenticate = async (req, res, next) => {
     // Log JWT_SECRET status at runtime
     if (!JWT_SECRET) {
       console.error("CRITICAL: JWT_SECRET is undefined or empty!");
-      return res.status(500).json({ error: "Server configuration error: JWT_SECRET not set" });
+      return res
+        .status(500)
+        .json({ error: "Server configuration error: JWT_SECRET not set" });
     }
 
     // Try to get token from Authorization header first, then from query parameter
@@ -358,10 +374,12 @@ const authenticate = async (req, res, next) => {
     req.user = user;
     next();
   } catch (error) {
-    console.error("Authentication middleware error:", error.message, error.stack);
-    res
-      .status(500)
-      .json({ error: error.message });
+    console.error(
+      "Authentication middleware error:",
+      error.message,
+      error.stack
+    );
+    res.status(500).json({ error: error.message });
   }
 };
 
@@ -431,7 +449,10 @@ app.post(
   upload.single("video"),
   async (req, res) => {
     try {
+      console.log("=== Upload Request Started ===");
+
       if (!req.file) {
+        console.log("No file in request");
         return res.status(400).json({ error: "No file uploaded" });
       }
 
@@ -440,11 +461,16 @@ app.post(
       const originalName = req.file.originalname;
       const fileBuffer = req.file.buffer;
 
+      console.log(
+        `Upload: userId=${userId}, file=${originalName}, size=${fileSize}`
+      );
+
       // Generate unique filename
       const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
       const filename = uniqueSuffix + path.extname(originalName);
 
       // Validate upload using model service
+      console.log("Validating upload with model service...");
       const validation = await axios.post(
         `${MODEL_SERVICE_URL}/api/videos/validate-upload`,
         {
@@ -453,11 +479,15 @@ app.post(
         }
       );
 
+      console.log("Validation result:", validation.data);
+
       if (!validation.data.valid) {
+        console.log("Validation failed:", validation.data);
         return res.status(403).json(validation.data);
       }
 
       // Upload to GCS
+      console.log("Uploading to GCS...");
       let gcsResult;
       try {
         gcsResult = await uploadToGCS(
@@ -466,7 +496,9 @@ app.post(
           userId,
           originalName
         );
+        console.log("GCS upload successful:", gcsResult);
       } catch (gcsError) {
+        console.error("GCS upload error:", gcsError.message, gcsError.stack);
         await logEvent(
           "error",
           "ControllerServ",
@@ -926,7 +958,7 @@ app.get("/health", (req, res) => {
 });
 
 const PORT = process.env.PORT || 3005;
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Controller Service running on port ${PORT}`);
   console.log(
     `GCS Bucket: ${
@@ -945,3 +977,8 @@ app.listen(PORT, () => {
     `FRONTEND_URL: ${process.env.FRONTEND_URL || "http://localhost:3000"}`
   );
 });
+
+// Set server timeouts for large file uploads
+server.timeout = 300000; // 5 minutes
+server.keepAliveTimeout = 120000; // 2 minutes
+server.headersTimeout = 120000; // 2 minutes
