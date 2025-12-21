@@ -1,19 +1,34 @@
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import { FaUsers, FaDatabase, FaList, FaChartBar, FaUserShield, FaUser, FaFilter, FaHome, FaSpinner } from 'react-icons/fa';
-import './AdminPanel.css';
+import React, { useState, useEffect } from "react";
+import axios from "axios";
+import {
+  FaUsers,
+  FaDatabase,
+  FaList,
+  FaChartBar,
+  FaUserShield,
+  FaUser,
+  FaFilter,
+  FaHome,
+  FaSpinner,
+} from "react-icons/fa";
+import "./AdminPanel.css";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || window.API_BASE_URL || 'http://localhost:3005';
-const USER_SERVICE_URL = import.meta.env.VITE_USER_SERVICE_URL || 'http://localhost:3001';
-const STORAGE_SERVICE_URL = import.meta.env.VITE_STORAGE_SERVICE_URL || 'http://localhost:3002';
-const LOGGING_SERVICE_URL = import.meta.env.VITE_LOGGING_SERVICE_URL || 'http://localhost:3006';
+// Use controller service for all API calls (it proxies to internal services)
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ||
+  window.API_BASE_URL ||
+  "http://104.154.135.248:3005";
 
 function AdminPanel({ currentUser, onBack }) {
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState("overview");
   const [storageStats, setStorageStats] = useState(null);
   const [allUsers, setAllUsers] = useState([]);
   const [logs, setLogs] = useState([]);
-  const [logFilters, setLogFilters] = useState({ service: '', level: '', limit: 500 });
+  const [logFilters, setLogFilters] = useState({
+    service: "",
+    level: "",
+    limit: 500,
+  });
   const [loading, setLoading] = useState(true);
   const [loadingUsers, setLoadingUsers] = useState(new Set()); // Track which users are being updated
 
@@ -24,13 +39,9 @@ function AdminPanel({ currentUser, onBack }) {
   const loadData = async () => {
     setLoading(true);
     try {
-      await Promise.all([
-        loadStorageStats(),
-        loadUsers(),
-        loadLogs()
-      ]);
+      await Promise.all([loadStorageStats(), loadUsers(), loadLogs()]);
     } catch (error) {
-      console.error('Error loading admin data:', error);
+      console.error("Error loading admin data:", error);
     } finally {
       setLoading(false);
     }
@@ -38,36 +49,48 @@ function AdminPanel({ currentUser, onBack }) {
 
   const loadStorageStats = async () => {
     try {
-      const response = await axios.get(`${STORAGE_SERVICE_URL}/api/storage/admin/stats`);
+      const token = localStorage.getItem("authToken");
+      const response = await axios.get(
+        `${API_BASE_URL}/api/admin/storage/stats`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
       setStorageStats(response.data);
     } catch (error) {
-      console.error('Error loading storage stats:', error);
+      console.error("Error loading storage stats:", error);
     }
   };
 
   const loadUsers = async () => {
     try {
-      const token = localStorage.getItem('authToken');
-      const response = await axios.get(`${USER_SERVICE_URL}/api/users`, {
-        headers: { Authorization: `Bearer ${token}` }
+      const token = localStorage.getItem("authToken");
+      const response = await axios.get(`${API_BASE_URL}/api/admin/users`, {
+        headers: { Authorization: `Bearer ${token}` },
       });
       setAllUsers(response.data.users || []);
     } catch (error) {
-      console.error('Error loading users:', error);
+      console.error("Error loading users:", error);
     }
   };
 
   const loadLogs = async () => {
     try {
+      const token = localStorage.getItem("authToken");
       const params = new URLSearchParams();
-      if (logFilters.service) params.append('service', logFilters.service);
-      if (logFilters.level) params.append('level', logFilters.level);
-      params.append('limit', logFilters.limit || 500);
+      if (logFilters.service) params.append("service", logFilters.service);
+      if (logFilters.level) params.append("level", logFilters.level);
+      params.append("limit", logFilters.limit || 500);
 
-      const response = await axios.get(`${LOGGING_SERVICE_URL}/api/logs?${params.toString()}`);
+      const response = await axios.get(
+        `${API_BASE_URL}/api/admin/logs?${params.toString()}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
       setLogs(response.data.logs || []);
     } catch (error) {
-      console.error('Error loading logs:', error);
+      console.error("Error loading logs:", error);
     }
   };
 
@@ -77,31 +100,31 @@ function AdminPanel({ currentUser, onBack }) {
     }
 
     // Add userId to loading set
-    setLoadingUsers(prev => new Set(prev).add(userId));
+    setLoadingUsers((prev) => new Set(prev).add(userId));
 
     try {
-      const token = localStorage.getItem('authToken');
+      const token = localStorage.getItem("authToken");
       await axios.put(
-        `${USER_SERVICE_URL}/api/users/${userId}/role`,
-        { role: 'admin' },
+        `${API_BASE_URL}/api/admin/users/${userId}/role`,
+        { role: "admin" },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      
+
       // Update local state
-      setAllUsers(users => 
-        users.map(user => 
-          user._id === userId ? { ...user, role: 'admin' } : user
+      setAllUsers((users) =>
+        users.map((user) =>
+          user._id === userId ? { ...user, role: "admin" } : user
         )
       );
-      
-      alert('User role updated successfully!');
+
+      alert("User role updated successfully!");
       await loadUsers(); // Refresh users list
     } catch (error) {
-      console.error('Error updating user role:', error);
-      alert(error.response?.data?.error || 'Failed to update user role');
+      console.error("Error updating user role:", error);
+      alert(error.response?.data?.error || "Failed to update user role");
     } finally {
       // Remove userId from loading set
-      setLoadingUsers(prev => {
+      setLoadingUsers((prev) => {
         const newSet = new Set(prev);
         newSet.delete(userId);
         return newSet;
@@ -110,36 +133,40 @@ function AdminPanel({ currentUser, onBack }) {
   };
 
   const removeAdmin = async (userId, email) => {
-    if (!window.confirm(`Are you sure you want to remove admin privileges from ${email}?`)) {
+    if (
+      !window.confirm(
+        `Are you sure you want to remove admin privileges from ${email}?`
+      )
+    ) {
       return;
     }
 
     // Add userId to loading set
-    setLoadingUsers(prev => new Set(prev).add(userId));
+    setLoadingUsers((prev) => new Set(prev).add(userId));
 
     try {
-      const token = localStorage.getItem('authToken');
+      const token = localStorage.getItem("authToken");
       await axios.put(
-        `${USER_SERVICE_URL}/api/users/${userId}/role`,
-        { role: 'user' },
+        `${API_BASE_URL}/api/admin/users/${userId}/role`,
+        { role: "user" },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      
+
       // Update local state
-      setAllUsers(users => 
-        users.map(user => 
-          user._id === userId ? { ...user, role: 'user' } : user
+      setAllUsers((users) =>
+        users.map((user) =>
+          user._id === userId ? { ...user, role: "user" } : user
         )
       );
-      
-      alert('User role updated successfully!');
+
+      alert("User role updated successfully!");
       await loadUsers(); // Refresh users list
     } catch (error) {
-      console.error('Error updating user role:', error);
-      alert(error.response?.data?.error || 'Failed to update user role');
+      console.error("Error updating user role:", error);
+      alert(error.response?.data?.error || "Failed to update user role");
     } finally {
       // Remove userId from loading set
-      setLoadingUsers(prev => {
+      setLoadingUsers((prev) => {
         const newSet = new Set(prev);
         newSet.delete(userId);
         return newSet;
@@ -148,17 +175,17 @@ function AdminPanel({ currentUser, onBack }) {
   };
 
   useEffect(() => {
-    if (activeTab === 'logs') {
+    if (activeTab === "logs") {
       loadLogs();
     }
   }, [activeTab, logFilters]);
 
   const formatBytes = (bytes) => {
-    if (bytes === 0) return '0 Bytes';
+    if (bytes === 0) return "0 Bytes";
     const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const sizes = ["Bytes", "KB", "MB", "GB"];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
   };
 
   if (loading && !storageStats && allUsers.length === 0) {
@@ -178,7 +205,9 @@ function AdminPanel({ currentUser, onBack }) {
   return (
     <div className="admin-panel">
       <div className="admin-header">
-        <h1><FaUserShield /> Admin Panel</h1>
+        <h1>
+          <FaUserShield /> Admin Panel
+        </h1>
         <button className="back-button" onClick={onBack}>
           <FaHome /> Back to Videos
         </button>
@@ -186,33 +215,33 @@ function AdminPanel({ currentUser, onBack }) {
 
       <div className="admin-tabs">
         <button
-          className={activeTab === 'overview' ? 'active' : ''}
-          onClick={() => setActiveTab('overview')}
+          className={activeTab === "overview" ? "active" : ""}
+          onClick={() => setActiveTab("overview")}
         >
           <FaChartBar /> Overview
         </button>
         <button
-          className={activeTab === 'users' ? 'active' : ''}
-          onClick={() => setActiveTab('users')}
+          className={activeTab === "users" ? "active" : ""}
+          onClick={() => setActiveTab("users")}
         >
           <FaUsers /> Users ({allUsers.length})
         </button>
         <button
-          className={activeTab === 'storage' ? 'active' : ''}
-          onClick={() => setActiveTab('storage')}
+          className={activeTab === "storage" ? "active" : ""}
+          onClick={() => setActiveTab("storage")}
         >
           <FaDatabase /> Storage
         </button>
         <button
-          className={activeTab === 'logs' ? 'active' : ''}
-          onClick={() => setActiveTab('logs')}
+          className={activeTab === "logs" ? "active" : ""}
+          onClick={() => setActiveTab("logs")}
         >
           <FaList /> Logs ({logs.length})
         </button>
       </div>
 
       <div className="admin-content">
-        {activeTab === 'overview' && (
+        {activeTab === "overview" && (
           <div className="overview-section">
             <h2>System Overview</h2>
             <div className="stats-grid">
@@ -220,16 +249,21 @@ function AdminPanel({ currentUser, onBack }) {
                 <h3>Total Users</h3>
                 <div className="stat-value">{allUsers.length}</div>
                 <div className="stat-detail">
-                  {allUsers.filter(u => u.role === 'admin').length} Admin(s)
+                  {allUsers.filter((u) => u.role === "admin").length} Admin(s)
                 </div>
               </div>
               <div className="stat-card">
                 <h3>Total Storage Used</h3>
                 <div className="stat-value">
-                  {storageStats ? formatBytes(storageStats.totalUsedStorage) : '0 Bytes'}
+                  {storageStats
+                    ? formatBytes(storageStats.totalUsedStorage)
+                    : "0 Bytes"}
                 </div>
                 <div className="stat-detail">
-                  of {storageStats ? formatBytes(storageStats.totalMaxStorage) : '0 Bytes'}
+                  of{" "}
+                  {storageStats
+                    ? formatBytes(storageStats.totalMaxStorage)
+                    : "0 Bytes"}
                 </div>
                 {storageStats && (
                   <div className="progress-bar">
@@ -237,11 +271,12 @@ function AdminPanel({ currentUser, onBack }) {
                       className="progress-fill"
                       style={{
                         width: `${Math.min(storageStats.usagePercent, 100)}%`,
-                        background: storageStats.usagePercent >= 100
-                          ? '#dc3545'
-                          : storageStats.usagePercent >= 80
-                          ? '#ffc107'
-                          : '#667eea'
+                        background:
+                          storageStats.usagePercent >= 100
+                            ? "#dc3545"
+                            : storageStats.usagePercent >= 80
+                            ? "#ffc107"
+                            : "#667eea",
                       }}
                     />
                   </div>
@@ -249,12 +284,16 @@ function AdminPanel({ currentUser, onBack }) {
               </div>
               <div className="stat-card">
                 <h3>Total Files</h3>
-                <div className="stat-value">{storageStats?.totalFiles || 0}</div>
+                <div className="stat-value">
+                  {storageStats?.totalFiles || 0}
+                </div>
                 <div className="stat-detail">Videos uploaded</div>
               </div>
               <div className="stat-card">
                 <h3>Storage Alerts</h3>
-                <div className="stat-value">{storageStats?.usersOver80Percent || 0}</div>
+                <div className="stat-value">
+                  {storageStats?.usersOver80Percent || 0}
+                </div>
                 <div className="stat-detail">
                   {storageStats?.usersAtLimit || 0} at limit
                 </div>
@@ -263,7 +302,7 @@ function AdminPanel({ currentUser, onBack }) {
           </div>
         )}
 
-        {activeTab === 'users' && (
+        {activeTab === "users" && (
           <div className="users-section">
             <h2>All Users</h2>
             <div className="users-table-container">
@@ -289,12 +328,16 @@ function AdminPanel({ currentUser, onBack }) {
                       </td>
                       <td>{new Date(user.createdAt).toLocaleDateString()}</td>
                       <td>
-                        {user.role === 'user' ? (
+                        {user.role === "user" ? (
                           <button
                             className="action-button make-admin"
                             onClick={() => makeAdmin(user._id, user.email)}
                             disabled={loadingUsers.has(user._id)}
-                            title={loadingUsers.has(user._id) ? "Updating..." : "Make user an admin"}
+                            title={
+                              loadingUsers.has(user._id)
+                                ? "Updating..."
+                                : "Make user an admin"
+                            }
                           >
                             {loadingUsers.has(user._id) ? (
                               <>
@@ -310,8 +353,17 @@ function AdminPanel({ currentUser, onBack }) {
                           <button
                             className="action-button remove-admin"
                             onClick={() => removeAdmin(user._id, user.email)}
-                            disabled={user._id === currentUser?.userId || loadingUsers.has(user._id)}
-                            title={user._id === currentUser?.userId ? "Cannot remove your own admin privileges" : loadingUsers.has(user._id) ? "Updating..." : "Remove admin privileges"}
+                            disabled={
+                              user._id === currentUser?.userId ||
+                              loadingUsers.has(user._id)
+                            }
+                            title={
+                              user._id === currentUser?.userId
+                                ? "Cannot remove your own admin privileges"
+                                : loadingUsers.has(user._id)
+                                ? "Updating..."
+                                : "Remove admin privileges"
+                            }
                           >
                             {loadingUsers.has(user._id) ? (
                               <>
@@ -333,7 +385,7 @@ function AdminPanel({ currentUser, onBack }) {
           </div>
         )}
 
-        {activeTab === 'storage' && (
+        {activeTab === "storage" && (
           <div className="storage-section">
             <h2>Storage Statistics</h2>
             {storageStats && (
@@ -343,26 +395,33 @@ function AdminPanel({ currentUser, onBack }) {
                   <div className="storage-details">
                     <div className="storage-item">
                       <span>Used:</span>
-                      <strong>{formatBytes(storageStats.totalUsedStorage)}</strong>
+                      <strong>
+                        {formatBytes(storageStats.totalUsedStorage)}
+                      </strong>
                     </div>
                     <div className="storage-item">
                       <span>Available:</span>
-                      <strong>{formatBytes(storageStats.totalAvailableStorage)}</strong>
+                      <strong>
+                        {formatBytes(storageStats.totalAvailableStorage)}
+                      </strong>
                     </div>
                     <div className="storage-item">
                       <span>Total:</span>
-                      <strong>{formatBytes(storageStats.totalMaxStorage)}</strong>
+                      <strong>
+                        {formatBytes(storageStats.totalMaxStorage)}
+                      </strong>
                     </div>
                     <div className="progress-bar-large">
                       <div
                         className="progress-fill"
                         style={{
                           width: `${Math.min(storageStats.usagePercent, 100)}%`,
-                          background: storageStats.usagePercent >= 100
-                            ? '#dc3545'
-                            : storageStats.usagePercent >= 80
-                            ? '#ffc107'
-                            : '#667eea'
+                          background:
+                            storageStats.usagePercent >= 100
+                              ? "#dc3545"
+                              : storageStats.usagePercent >= 80
+                              ? "#ffc107"
+                              : "#667eea",
                         }}
                       />
                     </div>
@@ -374,23 +433,33 @@ function AdminPanel({ currentUser, onBack }) {
                 <div className="storage-metrics">
                   <div className="metric-item">
                     <span className="metric-label">Total Users:</span>
-                    <span className="metric-value">{storageStats.totalUsers}</span>
+                    <span className="metric-value">
+                      {storageStats.totalUsers}
+                    </span>
                   </div>
                   <div className="metric-item">
                     <span className="metric-label">Total Files:</span>
-                    <span className="metric-value">{storageStats.totalFiles}</span>
+                    <span className="metric-value">
+                      {storageStats.totalFiles}
+                    </span>
                   </div>
                   <div className="metric-item">
                     <span className="metric-label">Average per User:</span>
-                    <span className="metric-value">{formatBytes(storageStats.averageUsagePerUser)}</span>
+                    <span className="metric-value">
+                      {formatBytes(storageStats.averageUsagePerUser)}
+                    </span>
                   </div>
                   <div className="metric-item">
                     <span className="metric-label">Users Over 80%:</span>
-                    <span className="metric-value warning">{storageStats.usersOver80Percent}</span>
+                    <span className="metric-value warning">
+                      {storageStats.usersOver80Percent}
+                    </span>
                   </div>
                   <div className="metric-item">
                     <span className="metric-label">Users At Limit:</span>
-                    <span className="metric-value error">{storageStats.usersAtLimit}</span>
+                    <span className="metric-value error">
+                      {storageStats.usersAtLimit}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -398,13 +467,15 @@ function AdminPanel({ currentUser, onBack }) {
           </div>
         )}
 
-        {activeTab === 'logs' && (
+        {activeTab === "logs" && (
           <div className="logs-section">
             <h2>System Logs</h2>
             <div className="logs-filters">
               <select
                 value={logFilters.service}
-                onChange={(e) => setLogFilters({ ...logFilters, service: e.target.value })}
+                onChange={(e) =>
+                  setLogFilters({ ...logFilters, service: e.target.value })
+                }
               >
                 <option value="">All Services</option>
                 <option value="UserAccMgmtServ">User Service</option>
@@ -416,7 +487,9 @@ function AdminPanel({ currentUser, onBack }) {
               </select>
               <select
                 value={logFilters.level}
-                onChange={(e) => setLogFilters({ ...logFilters, level: e.target.value })}
+                onChange={(e) =>
+                  setLogFilters({ ...logFilters, level: e.target.value })
+                }
               >
                 <option value="">All Levels</option>
                 <option value="info">Info</option>
@@ -427,7 +500,12 @@ function AdminPanel({ currentUser, onBack }) {
                 type="number"
                 placeholder="Limit"
                 value={logFilters.limit}
-                onChange={(e) => setLogFilters({ ...logFilters, limit: parseInt(e.target.value) || 500 })}
+                onChange={(e) =>
+                  setLogFilters({
+                    ...logFilters,
+                    limit: parseInt(e.target.value) || 500,
+                  })
+                }
               />
               <button onClick={loadLogs} className="filter-button">
                 <FaFilter /> Apply Filters
@@ -452,11 +530,13 @@ function AdminPanel({ currentUser, onBack }) {
                       <tr key={index} className={`log-row log-${log.level}`}>
                         <td>{new Date(log.timestamp).toLocaleString()}</td>
                         <td>
-                          <span className={`log-badge log-badge-${log.level}`}>{log.level}</span>
+                          <span className={`log-badge log-badge-${log.level}`}>
+                            {log.level}
+                          </span>
                         </td>
                         <td>{log.service}</td>
                         <td>{log.message}</td>
-                        <td>{log.userId || '-'}</td>
+                        <td>{log.userId || "-"}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -471,4 +551,3 @@ function AdminPanel({ currentUser, onBack }) {
 }
 
 export default AdminPanel;
-

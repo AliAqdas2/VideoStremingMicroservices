@@ -28,7 +28,7 @@ import "./App.css";
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
   window.API_BASE_URL ||
-  "http://localhost:3005";
+  "http://104.154.135.248:3005";
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);

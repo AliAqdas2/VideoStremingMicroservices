@@ -9,6 +9,10 @@ RUN npm install
 # Copy source files
 COPY . .
 
+# Set build-time environment variable for the API URL
+ARG CONTROLLER_SERVICE_URL=http://104.154.135.248:3005
+ENV CONTROLLER_SERVICE_URL=$CONTROLLER_SERVICE_URL
+
 # Build the React + Vite app
 RUN npm run build
 

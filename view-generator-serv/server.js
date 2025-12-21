@@ -26,7 +26,7 @@ const publicPath = path.join(__dirname, "public");
 app.get("/api/config", (req, res) => {
   res.json({
     controllerServiceUrl:
-      process.env.CONTROLLER_SERVICE_URL || "http://localhost:3005",
+      process.env.CONTROLLER_SERVICE_URL || "http://104.154.135.248:3005",
   });
 });
 
@@ -45,7 +45,7 @@ if (isProduction && fs.existsSync(distPath)) {
     if (fs.existsSync(indexPath)) {
       let html = fs.readFileSync(indexPath, "utf8");
       const controllerUrl =
-        process.env.CONTROLLER_SERVICE_URL || "http://localhost:3005";
+        process.env.CONTROLLER_SERVICE_URL || "http://104.154.135.248:3005";
       const scriptTag = `<script>window.API_BASE_URL = '${controllerUrl}';</script>`;
       html = html.replace("</head>", `    ${scriptTag}\n</head>`);
       res.send(html);
@@ -66,7 +66,7 @@ app.listen(PORT, () => {
   }
   console.log(
     `API Base URL: ${
-      process.env.CONTROLLER_SERVICE_URL || "http://localhost:3005"
+      process.env.CONTROLLER_SERVICE_URL || "http://104.154.135.248:3005"
     }`
   );
 });
