@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: usage-mntr-serv
-        image: gcr.io/YOUR_PROJECT_ID/usage-mntr-serv:latest
+        image: gcr.io/cloud-project-video-streaming/usage-mntr-serv:latest
         ports:
         - containerPort: 3003
         env:
@@ -50,4 +50,5 @@ spec:
   - port: 3003
     targetPort: 3003
   type: ClusterIP
+
 

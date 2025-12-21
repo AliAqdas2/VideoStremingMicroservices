@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: model-serv
-        image: gcr.io/YOUR_PROJECT_ID/model-serv:latest
+        image: gcr.io/cloud-project-video-streaming/model-serv:latest
         ports:
         - containerPort: 3004
         env:
@@ -54,4 +54,5 @@ spec:
   - port: 3004
     targetPort: 3004
   type: ClusterIP
+
 

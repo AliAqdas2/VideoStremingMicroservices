@@ -4,8 +4,8 @@ metadata:
   name: app-config
   namespace: videostream
 data:
-  gcs-bucket-name: "videostream-videos"
-  gcp-project-id: "YOUR_PROJECT_ID"
+  gcs-bucket-name: "cloud-project-video-streaming-videostream-videos"
+  gcp-project-id: "cloud-project-video-streaming"
 ---
 apiVersion: v1
 kind: Secret
@@ -17,4 +17,5 @@ stringData:
   key.json: |
     # Paste your GCP service account JSON key here
     # Or use: kubectl create secret generic gcp-storage-key --from-file=key.json=/path/to/service-account-key.json --namespace=videostream
+
 

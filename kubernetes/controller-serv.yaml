@@ -14,62 +14,67 @@ spec:
         app: controller-serv
     spec:
       containers:
-      - name: controller-serv
-        image: gcr.io/YOUR_PROJECT_ID/controller-serv:latest
-        ports:
-        - containerPort: 3005
-        env:
-        - name: PORT
-          value: "3005"
-        - name: USER_SERVICE_URL
-          value: "http://user-acc-mgmt-serv:3001"
-        - name: MODEL_SERVICE_URL
-          value: "http://model-serv:3004"
-        - name: STORAGE_SERVICE_URL
-          value: "http://storage-mgmt-serv:3002"
-        - name: LOGGING_SERVICE_URL
-          value: "http://logging-serv:3006"
-        - name: TEMP_UPLOAD_DIR
-          value: "/app/temp_uploads"
-        - name: GCS_BUCKET_NAME
-          valueFrom:
-            configMapKeyRef:
-              name: app-config
-              key: gcs-bucket-name
-        - name: GCS_PROJECT_ID
-          valueFrom:
-            configMapKeyRef:
-              name: app-config
-              key: gcp-project-id
-        - name: GOOGLE_APPLICATION_CREDENTIALS
-          value: "/var/secrets/google/key.json"
-        resources:
-          requests:
-            memory: "256Mi"
-            cpu: "250m"
-          limits:
-            memory: "512Mi"
-            cpu: "500m"
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 3005
-          initialDelaySeconds: 30
-          periodSeconds: 10
-        readinessProbe:
-          httpGet:
-            path: /health
-            port: 3005
-          initialDelaySeconds: 10
-          periodSeconds: 5
-        volumeMounts:
-        - name: gcp-key
-          mountPath: /var/secrets/google
-          readOnly: true
+        - name: controller-serv
+          image: gcr.io/cloud-project-video-streaming/controller-serv:latest
+          ports:
+            - containerPort: 3005
+          env:
+            - name: PORT
+              value: "3005"
+            - name: USER_SERVICE_URL
+              value: "http://user-acc-mgmt-serv:3001"
+            - name: MODEL_SERVICE_URL
+              value: "http://model-serv:3004"
+            - name: STORAGE_SERVICE_URL
+              value: "http://storage-mgmt-serv:3002"
+            - name: LOGGING_SERVICE_URL
+              value: "http://logging-serv:3006"
+            - name: TEMP_UPLOAD_DIR
+              value: "/app/temp_uploads"
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: jwt-secret
+            - name: GCS_BUCKET_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: gcs-bucket-name
+            - name: GCS_PROJECT_ID
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: gcp-project-id
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: "/var/secrets/google/key.json"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3005
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3005
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          volumeMounts:
+            - name: gcp-key
+              mountPath: /var/secrets/google
+              readOnly: true
       volumes:
-      - name: gcp-key
-        secret:
-          secretName: gcp-storage-key
+        - name: gcp-key
+          secret:
+            secretName: gcp-storage-key
 ---
 apiVersion: v1
 kind: Service
@@ -80,7 +85,6 @@ spec:
   selector:
     app: controller-serv
   ports:
-  - port: 3005
-    targetPort: 3005
+    - port: 3005
+      targetPort: 3005
   type: ClusterIP
-

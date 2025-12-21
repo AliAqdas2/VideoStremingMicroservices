@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: user-acc-mgmt-serv
-        image: gcr.io/YOUR_PROJECT_ID/user-acc-mgmt-serv:latest
+        image: gcr.io/cloud-project-video-streaming/user-acc-mgmt-serv:latest
         ports:
         - containerPort: 3001
         env:
@@ -55,4 +55,5 @@ spec:
   - port: 3001
     targetPort: 3001
   type: ClusterIP
+
 

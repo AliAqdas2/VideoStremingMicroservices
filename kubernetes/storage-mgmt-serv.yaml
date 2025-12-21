@@ -5,10 +5,10 @@ metadata:
   namespace: videostream
 spec:
   accessModes:
-    - ReadWriteMany
+    - ReadWriteOnce
   resources:
     requests:
-      storage: 100Gi
+      storage: 10Gi
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -16,7 +16,7 @@ metadata:
   name: storage-mgmt-serv
   namespace: videostream
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: storage-mgmt-serv
@@ -26,38 +26,38 @@ spec:
         app: storage-mgmt-serv
     spec:
       containers:
-      - name: storage-mgmt-serv
-        image: gcr.io/YOUR_PROJECT_ID/storage-mgmt-serv:latest
-        ports:
-        - containerPort: 3002
-        env:
-        - name: PORT
-          value: "3002"
-        - name: MONGODB_URI
-          value: "mongodb://mongodb:27017/videostream_storage"
-        - name: STORAGE_DIR
-          value: "/app/uploads"
-        - name: LOGGING_SERVICE_URL
-          value: "http://logging-serv:3006"
-        volumeMounts:
-        - name: storage-volume
-          mountPath: /app/uploads
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 3002
-          initialDelaySeconds: 30
-          periodSeconds: 10
-        readinessProbe:
-          httpGet:
-            path: /health
-            port: 3002
-          initialDelaySeconds: 10
-          periodSeconds: 5
+        - name: storage-mgmt-serv
+          image: gcr.io/cloud-project-video-streaming/storage-mgmt-serv:latest
+          ports:
+            - containerPort: 3002
+          env:
+            - name: PORT
+              value: "3002"
+            - name: MONGODB_URI
+              value: "mongodb://mongodb:27017/videostream_storage"
+            - name: STORAGE_DIR
+              value: "/app/uploads"
+            - name: LOGGING_SERVICE_URL
+              value: "http://logging-serv:3006"
+          volumeMounts:
+            - name: storage-volume
+              mountPath: /app/uploads
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3002
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3002
+            initialDelaySeconds: 10
+            periodSeconds: 5
       volumes:
-      - name: storage-volume
-        persistentVolumeClaim:
-          claimName: storage-pvc
+        - name: storage-volume
+          persistentVolumeClaim:
+            claimName: storage-pvc
 ---
 apiVersion: v1
 kind: Service
@@ -68,7 +68,6 @@ spec:
   selector:
     app: storage-mgmt-serv
   ports:
-  - port: 3002
-    targetPort: 3002
+    - port: 3002
+      targetPort: 3002
   type: ClusterIP
-

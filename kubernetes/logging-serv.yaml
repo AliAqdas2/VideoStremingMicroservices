@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: logging-serv
-        image: gcr.io/YOUR_PROJECT_ID/logging-serv:latest
+        image: gcr.io/cloud-project-video-streaming/logging-serv:latest
         ports:
         - containerPort: 3006
         env:
@@ -48,4 +48,5 @@ spec:
   - port: 3006
     targetPort: 3006
   type: ClusterIP
+
 

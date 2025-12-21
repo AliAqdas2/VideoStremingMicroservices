@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: view-generator-serv
-        image: gcr.io/YOUR_PROJECT_ID/view-generator-serv:latest
+        image: gcr.io/cloud-project-video-streaming/view-generator-serv:latest
         ports:
         - containerPort: 3000
         env:
@@ -48,4 +48,5 @@ spec:
   - port: 3000
     targetPort: 3000
   type: LoadBalancer
+
 

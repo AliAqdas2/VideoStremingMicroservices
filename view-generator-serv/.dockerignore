@@ -4,7 +4,3 @@ dist
 .git
 .gitignore
 .vite
-src
-public
-index.html
-vite.config.js
